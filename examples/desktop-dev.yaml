@@ -1,0 +1,136 @@
+version: "1.0"
+
+# Development desktop configuration example
+# This configuration sets up a complete development environment
+
+packages:
+  # Essential development tools
+  apt:
+    - git
+    - curl
+    - wget
+    - vim
+    - neovim
+    - tmux
+    - htop
+    - tree
+    - jq
+    - build-essential
+    - python3-pip
+    - nodejs
+    - npm
+    - docker.io
+    - docker-compose
+    - zsh
+    - fish
+    - ripgrep
+    - fd-find
+    - fzf
+    - bat
+    - exa
+
+  # GUI applications via Flatpak
+  flatpak:
+    - org.mozilla.firefox
+    - com.visualstudio.code
+    - org.gimp.GIMP
+    - org.inkscape.Inkscape
+    - com.spotify.Client
+    - org.signal.Signal
+    - com.discordapp.Discord
+    - org.telegram.desktop
+
+  # Snap packages
+  snap:
+    - code
+    - slack
+    - postman
+    - insomnia
+
+files:
+  # Shell configuration
+  zshrc:
+    source: "dotfiles/zshrc"
+    destination: "~/.zshrc"
+    backup: true
+
+  bashrc:
+    source: "dotfiles/bashrc" 
+    destination: "~/.bashrc"
+    backup: true
+
+  # Git configuration
+  gitconfig:
+    source: "dotfiles/gitconfig"
+    destination: "~/.gitconfig"
+    backup: true
+
+  gitignore_global:
+    source: "dotfiles/gitignore_global"
+    destination: "~/.gitignore_global"
+    backup: true
+
+  # Editor configurations
+  vimrc:
+    source: "dotfiles/vimrc"
+    destination: "~/.vimrc"
+    backup: true
+
+  nvim_init:
+    source: "dotfiles/nvim/init.vim"
+    destination: "~/.config/nvim/init.vim"
+    backup: true
+
+  # Terminal multiplexer
+  tmux_conf:
+    source: "dotfiles/tmux.conf"
+    destination: "~/.tmux.conf"
+    backup: true
+
+  # Development tools
+  ssh_config:
+    source: "dotfiles/ssh/config"
+    destination: "~/.ssh/config"
+    mode: "600"
+    backup: true
+
+  # System configuration
+  docker_daemon:
+    source: "system/docker/daemon.json"
+    destination: "/etc/docker/daemon.json"
+    owner: "root"
+    group: "root"
+    mode: "644"
+    backup: true
+
+  # Custom hosts entries for development
+  hosts_dev:
+    source: "system/hosts.dev"
+    destination: "/etc/hosts"
+    owner: "root"
+    group: "root"
+    mode: "644"
+    backup: true
+
+dconf:
+  settings:
+    # Dark theme
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
+    
+    # Window management
+    "/org/gnome/desktop/wm/preferences/button-layout": "'close,minimize,maximize:'"
+    "/org/gnome/desktop/wm/preferences/focus-mode": "'click'"
+    
+    # Terminal settings
+    "/org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9/background-color": "'rgb(23,20,33)'"
+    "/org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9/foreground-color": "'rgb(208,207,204)'"
+    "/org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9/use-theme-colors": "false"
+    
+    # Keyboard shortcuts
+    "/org/gnome/settings-daemon/plugins/media-keys/terminal": "['<Ctrl><Alt>t']"
+    "/org/gnome/desktop/wm/keybindings/switch-applications": "['<Super>Tab']"
+    
+    # File manager
+    "/org/gnome/nautilus/preferences/show-hidden-files": "true"
+    "/org/gnome/nautilus/list-view/default-zoom-level": "'small'"

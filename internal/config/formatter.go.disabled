@@ -1,0 +1,270 @@
+package config
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Lipgloss styles for better terminal output
+var (
+	errorStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FF5F5F")).
+		Bold(true)
+	
+	warningStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFAF00")).
+		Bold(true)
+	
+	successStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#5FAF5F")).
+		Bold(true)
+	
+	infoStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#5F87AF"))
+	
+	helpStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#5FAFAF"))
+	
+	noteStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFAF5F"))
+	
+	suggestionStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#AF5FAF"))
+	
+	dimStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6C6C6C"))
+	
+	boldStyle = lipgloss.NewStyle().
+		Bold(true)
+	
+	pathStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#5F87AF")).
+		Underline(true)
+)
+
+// FormatValidationResult formats validation results in Rust-style output
+func FormatValidationResult(result *ValidationResult) string {
+	if len(result.Errors) == 0 && len(result.Warnings) == 0 {
+		return successStyle.Render("✓ Configuration is valid") + "\n"
+	}
+	
+	var output strings.Builder
+	
+	// Format errors
+	for i, err := range result.Errors {
+		if i > 0 {
+			output.WriteString("\n")
+		}
+		output.WriteString(formatError(err))
+	}
+	
+	// Format warnings
+	for i, warning := range result.Warnings {
+		if len(result.Errors) > 0 || i > 0 {
+			output.WriteString("\n")
+		}
+		output.WriteString(formatWarning(warning))
+	}
+	
+	// Summary
+	if len(result.Errors) > 0 || len(result.Warnings) > 0 {
+		output.WriteString(formatSummary(result))
+	}
+	
+	return output.String()
+}
+
+// formatError formats a single validation error
+func formatError(err ValidationError) string {
+	var output strings.Builder
+	
+	// Error header: "error: title"
+	output.WriteString(errorStyle.Render("error") + ": " + err.Title + "\n")
+	
+	// Location if available
+	if err.File != "" {
+		location := err.File
+		if err.Line > 0 {
+			location += fmt.Sprintf(":%d", err.Line)
+			if err.Column > 0 {
+				location += fmt.Sprintf(":%d", err.Column)
+			}
+		}
+		output.WriteString(fmt.Sprintf("%s  --> %s%s\n", ColorBlue, location, ColorReset))
+	}
+	
+	// Field path if available
+	if err.Field != "" {
+		output.WriteString(fmt.Sprintf("%s   |%s\n", ColorBlue, ColorReset))
+		
+		// Show field with problematic value highlighted
+		if err.Value != "" {
+			fieldDisplay := err.Field + ": " + err.Value
+			if err.Highlighted != "" {
+				// Highlight the problematic part
+				fieldDisplay = strings.Replace(fieldDisplay, err.Highlighted, 
+					fmt.Sprintf("%s%s%s%s%s", ColorBold, ColorRed, err.Highlighted, ColorReset, ColorBlue), 1)
+			}
+			output.WriteString(fmt.Sprintf("%s   | %s%s\n", ColorBlue, fieldDisplay, ColorReset))
+			
+			// Add underline pointing to the problem
+			if err.Highlighted != "" {
+				spaces := strings.Repeat(" ", len(err.Field)+2)
+				underline := strings.Repeat("^", len(err.Value))
+				output.WriteString(fmt.Sprintf("%s   | %s%s%s%s %s\n", 
+					ColorBlue, spaces, ColorRed, underline, ColorReset, err.Message))
+			}
+		} else {
+			output.WriteString(fmt.Sprintf("%s   | %s%s\n", ColorBlue, err.Field, ColorReset))
+		}
+		output.WriteString(fmt.Sprintf("%s   |%s\n", ColorBlue, ColorReset))
+	}
+	
+	// Help section
+	if err.Help != "" {
+		output.WriteString(fmt.Sprintf("%s   = %shelp%s: %s\n", 
+			ColorBlue, ColorCyan, ColorReset, err.Help))
+	}
+	
+	// Note section
+	if err.Note != "" {
+		output.WriteString(fmt.Sprintf("%s   = %snote%s: %s\n", 
+			ColorBlue, ColorYellow, ColorReset, err.Note))
+	}
+	
+	// Suggestion section
+	if err.Suggestion != "" {
+		output.WriteString(fmt.Sprintf("%s   = %ssuggestion%s: %s\n", 
+			ColorBlue, ColorMagenta, ColorReset, err.Suggestion))
+	}
+	
+	return output.String()
+}
+
+// formatWarning formats a single validation warning
+func formatWarning(warning ValidationError) string {
+	var output strings.Builder
+	
+	// Warning header: "warning: title"
+	output.WriteString(fmt.Sprintf("%s%swarning%s: %s\n", 
+		ColorBold, ColorYellow, ColorReset, warning.Title))
+	
+	// Location if available
+	if warning.File != "" {
+		location := warning.File
+		if warning.Line > 0 {
+			location += fmt.Sprintf(":%d", warning.Line)
+			if warning.Column > 0 {
+				location += fmt.Sprintf(":%d", warning.Column)
+			}
+		}
+		output.WriteString(fmt.Sprintf("%s  --> %s%s\n", ColorBlue, location, ColorReset))
+	}
+	
+	// Field and value
+	if warning.Field != "" {
+		output.WriteString(fmt.Sprintf("%s   |%s\n", ColorBlue, ColorReset))
+		if warning.Value != "" {
+			output.WriteString(fmt.Sprintf("%s   | %s: %s%s\n", 
+				ColorBlue, warning.Field, warning.Value, ColorReset))
+		} else {
+			output.WriteString(fmt.Sprintf("%s   | %s%s\n", 
+				ColorBlue, warning.Field, ColorReset))
+		}
+		output.WriteString(fmt.Sprintf("%s   |%s\n", ColorBlue, ColorReset))
+	}
+	
+	// Help section
+	if warning.Help != "" {
+		output.WriteString(fmt.Sprintf("%s   = %shelp%s: %s\n", 
+			ColorBlue, ColorCyan, ColorReset, warning.Help))
+	}
+	
+	// Note section  
+	if warning.Note != "" {
+		output.WriteString(fmt.Sprintf("%s   = %snote%s: %s\n", 
+			ColorBlue, ColorYellow, ColorReset, warning.Note))
+	}
+	
+	return output.String()
+}
+
+// formatSummary formats the validation summary
+func formatSummary(result *ValidationResult) string {
+	var output strings.Builder
+	
+	output.WriteString("\n")
+	
+	// Error count
+	if len(result.Errors) > 0 {
+		errorWord := "error"
+		if len(result.Errors) > 1 {
+			errorWord = "errors"
+		}
+		output.WriteString(fmt.Sprintf("%s%s%s: could not validate configuration due to %d %s\n", 
+			ColorBold, ColorRed, ColorReset, len(result.Errors), errorWord))
+	}
+	
+	// Warning count
+	if len(result.Warnings) > 0 {
+		warningWord := "warning"
+		if len(result.Warnings) > 1 {
+			warningWord = "warnings"
+		}
+		
+		if len(result.Errors) > 0 {
+			output.WriteString(fmt.Sprintf("%s%s%s: configuration has %d %s\n", 
+				ColorBold, ColorYellow, ColorReset, len(result.Warnings), warningWord))
+		} else {
+			output.WriteString(fmt.Sprintf("%s%s%s: configuration is valid but has %d %s\n", 
+				ColorBold, ColorYellow, ColorReset, len(result.Warnings), warningWord))
+		}
+	}
+	
+	return output.String()
+}
+
+// FormatQuickFix provides a quick summary for simple fixes
+func FormatQuickFix(result *ValidationResult) string {
+	if len(result.Errors) == 0 {
+		return ""
+	}
+	
+	var output strings.Builder
+	output.WriteString(fmt.Sprintf("\n%s%sQuick fixes:%s\n", ColorBold, ColorCyan, ColorReset))
+	
+	for i, err := range result.Errors {
+		if i >= 3 { // Show only first 3 for brevity
+			remaining := len(result.Errors) - 3
+			output.WriteString(fmt.Sprintf("  %s... and %d more errors%s\n", ColorDim, remaining, ColorReset))
+			break
+		}
+		
+		fix := getQuickFix(err)
+		if fix != "" {
+			output.WriteString(fmt.Sprintf("  %s•%s %s\n", ColorCyan, ColorReset, fix))
+		}
+	}
+	
+	return output.String()
+}
+
+// getQuickFix returns a one-line fix suggestion
+func getQuickFix(err ValidationError) string {
+	switch {
+	case strings.Contains(err.Title, "missing version"):
+		return "Add 'version: \"1.0\"' to the top of your config file"
+	case strings.Contains(err.Title, "source file not found"):
+		return fmt.Sprintf("Create missing file: %s", err.Value)
+	case strings.Contains(err.Title, "invalid file mode"):
+		return fmt.Sprintf("Change mode to \"644\" in %s", err.Field)
+	case strings.Contains(err.Title, "empty package name"):
+		return "Remove empty package entries from your lists"
+	case strings.Contains(err.Title, "invalid dconf path"):
+		return fmt.Sprintf("Add '/' prefix to dconf path: %s", err.Value)
+	default:
+		return err.Help
+	}
+}

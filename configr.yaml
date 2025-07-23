@@ -1,0 +1,17 @@
+version: "1.0"
+
+packages:
+  apt:
+    - git
+    - curl
+    - vim
+  flatpak:
+    - org.mozilla.firefox
+    - com.visualstudio.code
+  snap:
+    - discord
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
