@@ -126,9 +126,9 @@ func resolveIncludePath(baseDir, includePath string) (string, error) {
 // mergeConfigs merges src config into dst config
 func mergeConfigs(dst, src *Config) error {
 	// Merge packages (remove duplicates)
-	dst.Packages.Apt = removeDuplicates(append(dst.Packages.Apt, src.Packages.Apt...))
-	dst.Packages.Flatpak = removeDuplicates(append(dst.Packages.Flatpak, src.Packages.Flatpak...))
-	dst.Packages.Snap = removeDuplicates(append(dst.Packages.Snap, src.Packages.Snap...))
+	dst.Packages.Apt = removeDuplicatePackages(append(dst.Packages.Apt, src.Packages.Apt...))
+	dst.Packages.Flatpak = removeDuplicatePackages(append(dst.Packages.Flatpak, src.Packages.Flatpak...))
+	dst.Packages.Snap = removeDuplicatePackages(append(dst.Packages.Snap, src.Packages.Snap...))
 
 	// Merge files (src overwrites dst if same key)
 	if dst.Files == nil {
@@ -157,6 +157,22 @@ func removeDuplicates(slice []string) []string {
 	for _, item := range slice {
 		if !seen[item] {
 			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	
+	return result
+}
+
+// removeDuplicatePackages removes duplicate PackageEntry instances from a slice while preserving order
+// Duplicates are determined by package name only (flags can differ)
+func removeDuplicatePackages(slice []PackageEntry) []PackageEntry {
+	seen := make(map[string]bool)
+	result := make([]PackageEntry, 0, len(slice))
+	
+	for _, item := range slice {
+		if !seen[item.Name] {
+			seen[item.Name] = true
 			result = append(result, item)
 		}
 	}

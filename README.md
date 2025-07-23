@@ -13,13 +13,13 @@ A single binary configuration management tool for Ubuntu desktop systems. Config
 
 ## Features
 
-- **Package Management**: Install and manage packages via APT, Flatpak, and Snap
+- **Smart Package Management**: Three-tier flag system with intelligent defaults for APT, Flatpak, and Snap
 - **File Management**: Deploy and manage configuration files (dotfiles, system files) with symlinks
 - **Desktop Configuration**: Manage GNOME dconf settings
 - **Modular Configuration**: Split configurations across multiple YAML files with includes
 - **Backup Support**: Automatic backup of existing files before replacement
 - **Professional CLI**: Styled help pages, auto-completion, and man page generation
-- **Comprehensive Validation**: Rust-style error reporting with actionable suggestions
+- **Comprehensive Validation**: Rust-style error reporting with actionable suggestions and flag safety warnings
 
 ## Installation
 
@@ -53,16 +53,23 @@ sudo mv _configr /usr/local/share/zsh/site-functions/
 ```yaml
 version: "1.0"
 
+# Optional: Customize default flags for package managers
+package_defaults:
+  apt: ["-y"]                        # Override internal defaults
+  flatpak: ["--user"]                # Prefer user installs
+
 packages:
   apt:
-    - git
+    - git                            # Uses: ["-y"] from package_defaults
     - curl
     - vim
   flatpak:
-    - org.mozilla.firefox
+    - org.mozilla.firefox            # Uses: ["--user"] from package_defaults
     - com.visualstudio.code
   snap:
-    - discord
+    - discord                        # Uses: [] (internal default)
+    - "code":                        # Override: needs --classic
+        flags: ["--classic"]
 
 files:
   vimrc:
@@ -109,12 +116,19 @@ Configr uses YAML configuration files with four main sections:
 
 ### Package Management
 
-Install packages from multiple sources:
+Configr features a powerful three-tier flag system that provides intelligent defaults while allowing fine-grained control over package installation flags.
+
+**Three-Tier Flag Resolution:**
+1. **Internal Defaults** - Built-in sensible defaults for each package manager
+2. **Package Defaults** - Your global defaults that override internal ones  
+3. **Per-Package Flags** - Specific flags for individual packages (highest priority)
+
+**Basic Package Installation:**
 
 ```yaml
 packages:
   apt:
-    - git
+    - git                            # Uses intelligent defaults
     - curl
     - build-essential
   flatpak:
@@ -122,8 +136,45 @@ packages:
     - com.visualstudio.code
   snap:
     - discord
-    - slack
+    - "code":                        # Some packages need special flags
+        flags: ["--classic"]
 ```
+
+**Advanced Flag Control:**
+
+```yaml
+# Optional: Override default flags globally
+package_defaults:
+  apt: ["-y"]                        # Less opinionated than internal defaults
+  flatpak: ["--user"]                # Prefer user installs over system
+  snap: []                           # Use internal defaults (empty for snaps)
+
+packages:
+  apt:
+    - git                            # Uses: ["-y"] from package_defaults
+    - "docker.io":                   # Per-package override
+        flags: ["-y", "--install-suggests"]
+        
+  flatpak:
+    - org.mozilla.firefox            # Uses: ["--user"] from package_defaults
+    - "com.spotify.Client":          # Override to system install  
+        flags: ["--system"]
+        
+  snap:
+    - discord                        # Uses: [] (internal default)
+    - "slack":                       # Requires --classic for desktop integration
+        flags: ["--classic"]
+```
+
+**Internal Default Flags (no configuration needed):**
+- **APT**: `["-y", "--no-install-recommends"]` - Non-interactive, minimal installs
+- **Snap**: `[]` - No defaults, snaps are interactive by design
+- **Flatpak**: `["--system", "--assumeyes"]` - System-wide, non-interactive
+
+**Common Flag Examples:**
+- Snap packages often need `--classic` for filesystem access (`code`, `slack`, `postman`)
+- Flatpak allows `--user` vs `--system` installation choices
+- APT supports `--install-suggests`, `--allow-unauthenticated`, etc.
 
 ### File Management
 

@@ -12,9 +12,19 @@ type Config struct {
 
 // PackageManagement contains all package manager configurations
 type PackageManagement struct {
-	Apt     []string `yaml:"apt" mapstructure:"apt"`
-	Flatpak []string `yaml:"flatpak" mapstructure:"flatpak"`
-	Snap    []string `yaml:"snap" mapstructure:"snap"`
+	Apt     []PackageEntry `yaml:"apt" mapstructure:"apt"`
+	Flatpak []PackageEntry `yaml:"flatpak" mapstructure:"flatpak"`
+	Snap    []PackageEntry `yaml:"snap" mapstructure:"snap"`
+}
+
+// PackageEntry represents a package with optional configuration
+// Supports both simple string format and complex nested format:
+//   Simple: "package-name"
+//   Complex: "package-name":
+//              flags: ["--flag1", "--flag2"]
+type PackageEntry struct {
+	Name  string   `yaml:"-" mapstructure:"-"`                           // Package name (from YAML key or string value)
+	Flags []string `yaml:"flags,omitempty" mapstructure:"flags,omitempty"` // Optional flags for this package
 }
 
 // File represents a file to be managed (dotfile, system file, etc.)

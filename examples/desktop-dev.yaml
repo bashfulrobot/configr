@@ -2,12 +2,19 @@ version: "1.0"
 
 # Development desktop configuration example
 # This configuration sets up a complete development environment
+# Demonstrates the three-tier flag system for package management
+
+# Global package manager defaults (override internal defaults)
+package_defaults:
+  apt: ["-y"]                              # Less opinionated than internal defaults
+  flatpak: ["--user", "--assumeyes"]       # Prefer user installs over system
+  snap: []                                 # No global defaults for snaps
 
 packages:
   # Essential development tools
   apt:
-    - git
-    - curl
+    - git                                  # Uses: ["-y"] from package_defaults
+    - curl                                 # Uses: ["-y"] from package_defaults  
     - wget
     - vim
     - neovim
@@ -19,7 +26,8 @@ packages:
     - python3-pip
     - nodejs
     - npm
-    - docker.io
+    - "docker.io":                         # Package needs additional dependencies
+        flags: ["-y", "--install-suggests"]
     - docker-compose
     - zsh
     - fish
@@ -29,22 +37,27 @@ packages:
     - bat
     - exa
 
-  # GUI applications via Flatpak
+  # GUI applications via Flatpak (user installs preferred for development)
   flatpak:
-    - org.mozilla.firefox
-    - com.visualstudio.code
+    - org.mozilla.firefox                  # Uses: ["--user", "--assumeyes"] from package_defaults
+    - com.visualstudio.code                # Uses: ["--user", "--assumeyes"] from package_defaults
     - org.gimp.GIMP
     - org.inkscape.Inkscape
-    - com.spotify.Client
+    - "com.spotify.Client":                # Override to system install for better integration
+        flags: ["--system", "--assumeyes"]
     - org.signal.Signal
     - com.discordapp.Discord
     - org.telegram.desktop
 
-  # Snap packages
+  # Snap packages (many development tools need --classic)
   snap:
-    - code
-    - slack
-    - postman
+    - discord                              # Uses: [] from package_defaults (internal default)
+    - "code":                              # Requires --classic for proper filesystem access
+        flags: ["--classic"]
+    - "slack":                             # Requires --classic for proper desktop integration
+        flags: ["--classic"]
+    - "postman":                           # Requires --classic for API testing
+        flags: ["--classic"]
     - insomnia
 
 files:

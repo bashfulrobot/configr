@@ -94,12 +94,71 @@ files:
 Only `source` and `destination` are required. All other attributes are optional and preserve existing file attributes when omitted.
 
 #### Package Management
-Simple list-based approach for each package manager:
+
+Configr implements a sophisticated three-tier flag system for package management that provides maximum flexibility while maintaining backward compatibility.
+
+**Three-Tier Flag Resolution Hierarchy:**
+
+1. **Internal Defaults** (Tier 1 - Built-in): Sensible defaults embedded in configr
+2. **User Package Defaults** (Tier 2 - Global): User-defined defaults in `package_defaults`  
+3. **Per-Package Flags** (Tier 3 - Specific): Package-specific overrides with highest priority
+
+**Internal Default Flags:**
+```yaml
+# Built into configr - no configuration needed
+apt: ["-y", "--no-install-recommends"]  # Non-interactive, minimal installs
+snap: []                                # No defaults - interactive by design
+flatpak: ["--system", "--assumeyes"]    # System-wide, non-interactive
+```
+
+**Flexible Package Syntax:**
+
+Supports both simple and complex formats with seamless mixing:
+
+```yaml
+# Optional: Override internal defaults globally
+package_defaults:
+  apt: ["-y"]                    # Override: less opinionated than internal
+  snap: ["--dangerous"]          # Override: add global snap behavior
+  flatpak: ["--user", "-y"]      # Override: prefer user installs
+
+packages:
+  apt:
+    - "git"                      # Simple: uses package_defaults.apt or internal
+    - "curl"                     # Simple: uses package_defaults.apt or internal
+    - "docker.io":               # Complex: package-specific override
+        flags: ["-y", "--install-suggests"]
+
+  snap:
+    - "discord"                  # Simple: uses package_defaults.snap or internal
+    - "code":                    # Complex: requires --classic for proper function
+        flags: ["--classic"]
+    - "slack":                   # Complex: multiple flags
+        flags: ["--channel=candidate", "--classic"]
+
+  flatpak:
+    - "org.mozilla.firefox"      # Simple: uses package_defaults.flatpak or internal
+    - "com.spotify.Client":      # Complex: override to system install
+        flags: ["--system"]
+```
+
+**Flag Resolution Examples:**
+
+Given the configuration above:
+- `git` uses: `["-y"]` (from package_defaults.apt)
+- `docker.io` uses: `["-y", "--install-suggests"]` (per-package override)
+- `discord` uses: `["--dangerous"]` (from package_defaults.snap)
+- `code` uses: `["--classic"]` (per-package override)
+- `org.mozilla.firefox` uses: `["--user", "-y"]` (from package_defaults.flatpak)
+- `com.spotify.Client` uses: `["--system"]` (per-package override)
+
+**Backward Compatibility:**
+
+Existing simple configurations continue to work unchanged:
 ```yaml
 packages:
-  apt: ["package1", "package2"]
-  flatpak: ["app.id.one", "app.id.two"]  
-  snap: ["snap1", "snap2"]
+  apt: ["git", "curl"]           # Still valid - uses internal defaults
+  snap: ["discord", "code"]      # Still valid - but code may need --classic
 ```
 
 #### DConf Settings

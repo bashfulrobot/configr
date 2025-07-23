@@ -1,0 +1,69 @@
+version: "1.0"
+
+# Advanced Flag System Example
+# Demonstrates comprehensive usage of the three-tier flag system
+# Shows various scenarios and best practices
+
+# Tier 2: User global defaults (override configr's internal defaults)
+package_defaults:
+  apt: ["-y", "--allow-unauthenticated"]  # More permissive than internal defaults
+  snap: ["--devmode"]                     # Enable development mode for all snaps
+  flatpak: ["--user", "--assumeyes"]      # User installs with automatic yes
+
+packages:
+  # APT packages with various flag scenarios
+  apt:
+    - git                                 # Uses: ["-y", "--allow-unauthenticated"] from package_defaults
+    - curl                                # Uses: ["-y", "--allow-unauthenticated"] from package_defaults
+    - "nginx":                            # Tier 3: Override for production server
+        flags: ["-y", "--no-install-recommends", "--install-suggests"]
+    - "mysql-server":                     # Tier 3: Careful installation for database
+        flags: ["-y", "--no-install-recommends"]
+    - build-essential                     # Uses package_defaults
+
+  # Flatpak applications with user/system choices
+  flatpak:
+    - org.mozilla.firefox                 # Uses: ["--user", "--assumeyes"] from package_defaults
+    - com.visualstudio.code               # Uses: ["--user", "--assumeyes"] from package_defaults
+    - "org.gimp.GIMP":                    # Tier 3: System install for shared use
+        flags: ["--system", "--assumeyes"]
+    - "com.spotify.Client":               # Tier 3: System with no dependencies
+        flags: ["--system", "--assumeyes", "--no-deps"]
+
+  # Snap packages with various confinement modes
+  snap:
+    - discord                             # Uses: ["--devmode"] from package_defaults
+    - "code":                             # Tier 3: Override to classic mode (most common for dev tools)
+        flags: ["--classic"]
+    - "slack":                            # Tier 3: Classic mode with specific channel
+        flags: ["--classic", "--channel=stable"]
+    - "postman":                          # Tier 3: Classic mode (required for API testing)
+        flags: ["--classic"]
+    - "android-studio":                   # Tier 3: Classic mode with edge channel
+        flags: ["--classic", "--channel=edge"]
+    - "helm":                             # Uses: ["--devmode"] from package_defaults
+        flags: []                         # Tier 3: Override to use internal defaults (empty)
+
+# Note: Flag Resolution Hierarchy
+# 1. Per-package flags (Tier 3) - highest priority
+# 2. package_defaults (Tier 2) - overrides internal
+# 3. Internal defaults (Tier 1) - built into configr
+#
+# Internal defaults are:
+# - apt: ["-y", "--no-install-recommends"]
+# - snap: [] (empty - interactive by design)  
+# - flatpak: ["--system", "--assumeyes"]
+
+files:
+  # Example showing this is still a complete configuration
+  nginx_config:
+    source: "configs/nginx.conf"
+    destination: "/etc/nginx/nginx.conf"
+    owner: "root"
+    group: "root"
+    mode: "644"
+    backup: true
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"

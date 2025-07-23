@@ -130,48 +130,19 @@ func validatePackages(config *Config, result *ValidationResult, configPos *Confi
 	// Check for duplicate packages across managers
 	allPackages := make(map[string]string) // package -> manager
 	
-	for _, pkg := range config.Packages.Apt {
-		if pkg == "" {
-			result.Add(ValidationError{
-				Type:    "error",
-				Title:   "empty package name",
-				Field:   "packages.apt",
-				Message: "package name cannot be empty",
-				Help:    "remove empty entries or provide valid package names",
-			})
-			continue
-		}
-		
-		if !isValidPackageName(pkg) {
-			result.Add(ValidationError{
-				Type:       "error",
-				Title:      "invalid package name",
-				Field:      "packages.apt",
-				Value:      pkg,
-				Message:    "package name contains invalid characters",
-				Help:       "use only lowercase letters, numbers, hyphens, and dots",
-				Suggestion: fmt.Sprintf("did you mean \"%s\"?", sanitizePackageName(pkg)),
-			})
-		}
-		
-		if existing, found := allPackages[pkg]; found {
-			result.Add(ValidationError{
-				Type:    "warning",
-				Title:   "duplicate package",
-				Field:   "packages.apt",
-				Value:   pkg,
-				Message: fmt.Sprintf("package '%s' is already listed in %s", pkg, existing),
-				Help:    "remove the duplicate entry",
-				Note:    "duplicate packages are ignored but clutter configuration",
-			})
-		} else {
-			allPackages[pkg] = "apt"
-		}
-	}
+	// Validate apt packages
+	validatePackageEntries(config.Packages.Apt, "apt", allPackages, result, configPos, configPath)
 	
-	// Similar validation for flatpak and snap...
-	validatePackageList(config.Packages.Flatpak, "flatpak", allPackages, result, configPos, configPath)
-	validatePackageList(config.Packages.Snap, "snap", allPackages, result, configPos, configPath)
+	// Validate flatpak packages
+	validatePackageEntries(config.Packages.Flatpak, "flatpak", allPackages, result, configPos, configPath)
+	
+	// Validate snap packages
+	validatePackageEntries(config.Packages.Snap, "snap", allPackages, result, configPos, configPath)
+	
+	// Validate package_defaults if present
+	if config.PackageDefaults != nil {
+		validatePackageDefaults(config.PackageDefaults, result, configPos, configPath)
+	}
 }
 
 // validateFiles checks file configurations
@@ -310,20 +281,259 @@ func sanitizePackageName(name string) string {
 	return strings.ToLower(regexp.MustCompile(`[^a-z0-9\-\.]`).ReplaceAllString(name, "-"))
 }
 
-func validatePackageList(packages []string, manager string, allPackages map[string]string, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
+// isValidPackageNameForManager validates package names based on the specific package manager
+func isValidPackageNameForManager(name, manager string) bool {
+	switch manager {
+	case "apt":
+		// APT package names: lowercase, numbers, hyphens, dots, plus signs
+		matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9\-\.\+]*$`, name)
+		return matched
+	case "flatpak":
+		// Flatpak app IDs: reverse domain notation with dots, letters, numbers
+		matched, _ := regexp.MatchString(`^[a-zA-Z0-9][a-zA-Z0-9\-\._]*[a-zA-Z0-9]$`, name)
+		return matched
+	case "snap":
+		// Snap package names: lowercase, numbers, hyphens
+		matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9\-]*$`, name)
+		return matched
+	default:
+		// Fallback to original validation
+		return isValidPackageName(name)
+	}
+}
+
+// getPackageNameValidationMessage returns validation message for specific package manager
+func getPackageNameValidationMessage(manager string) string {
+	switch manager {
+	case "apt":
+		return "APT package name contains invalid characters"
+	case "flatpak":
+		return "Flatpak app ID contains invalid characters"
+	case "snap":
+		return "Snap package name contains invalid characters"
+	default:
+		return "package name contains invalid characters"
+	}
+}
+
+// getPackageNameValidationHelp returns validation help for specific package manager
+func getPackageNameValidationHelp(manager string) string {
+	switch manager {
+	case "apt":
+		return "use only lowercase letters, numbers, hyphens, dots, and plus signs"
+	case "flatpak":
+		return "use reverse domain notation like org.app.Name or com.company.App"
+	case "snap":
+		return "use only lowercase letters, numbers, and hyphens"
+	default:
+		return "use only lowercase letters, numbers, hyphens, and dots"
+	}
+}
+
+// sanitizePackageNameForManager sanitizes package names based on the specific package manager
+func sanitizePackageNameForManager(name, manager string) string {
+	switch manager {
+	case "apt":
+		return strings.ToLower(regexp.MustCompile(`[^a-z0-9\-\.\+]`).ReplaceAllString(name, "-"))
+	case "flatpak":
+		// For flatpak, preserve case and dots, replace invalid chars with dots
+		return regexp.MustCompile(`[^a-zA-Z0-9\-\._]`).ReplaceAllString(name, ".")
+	case "snap":
+		return strings.ToLower(regexp.MustCompile(`[^a-z0-9\-]`).ReplaceAllString(name, "-"))
+	default:
+		return sanitizePackageName(name)
+	}
+}
+
+// validatePackageEntries validates a list of PackageEntry instances
+func validatePackageEntries(packages []PackageEntry, manager string, allPackages map[string]string, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
 	for _, pkg := range packages {
-		if existing, found := allPackages[pkg]; found {
+		// Validate package name
+		if pkg.Name == "" {
 			result.Add(ValidationError{
-				Type:    "warning", 
+				Type:    "error",
+				Title:   "empty package name",
+				Field:   fmt.Sprintf("packages.%s", manager),
+				Message: "package name cannot be empty",
+				Help:    "remove empty entries or provide valid package names",
+			})
+			continue
+		}
+		
+		if !isValidPackageNameForManager(pkg.Name, manager) {
+			result.Add(ValidationError{
+				Type:       "error",
+				Title:      "invalid package name",
+				Field:      fmt.Sprintf("packages.%s", manager),
+				Value:      pkg.Name,
+				Message:    getPackageNameValidationMessage(manager),
+				Help:       getPackageNameValidationHelp(manager),
+				Suggestion: fmt.Sprintf("did you mean \"%s\"?", sanitizePackageNameForManager(pkg.Name, manager)),
+			})
+		}
+		
+		// Check for duplicates
+		if existing, found := allPackages[pkg.Name]; found {
+			result.Add(ValidationError{
+				Type:    "warning",
 				Title:   "duplicate package",
 				Field:   fmt.Sprintf("packages.%s", manager),
-				Value:   pkg,
-				Message: fmt.Sprintf("package '%s' is already listed in %s", pkg, existing),
+				Value:   pkg.Name,
+				Message: fmt.Sprintf("package '%s' is already listed in %s", pkg.Name, existing),
 				Help:    "remove the duplicate entry",
+				Note:    "duplicate packages are ignored but clutter configuration",
 			})
 		} else {
-			allPackages[pkg] = manager
+			allPackages[pkg.Name] = manager
 		}
+		
+		// Validate package flags
+		validatePackageFlags(pkg, manager, result)
+	}
+}
+
+// validatePackageFlags validates the flags for a specific package entry
+func validatePackageFlags(pkg PackageEntry, manager string, result *ValidationResult) {
+	if len(pkg.Flags) == 0 {
+		return // No flags to validate
+	}
+	
+	// Check for dangerous flag combinations
+	validateFlagSafety(pkg.Flags, pkg.Name, manager, result)
+	
+	// Check for conflicting flags
+	validateFlagConflicts(pkg.Flags, pkg.Name, manager, result)
+	
+	// Suggest common patterns for specific packages
+	suggestCommonFlags(pkg, manager, result)
+}
+
+// validateFlagSafety checks for potentially dangerous flags
+func validateFlagSafety(flags []string, packageName, manager string, result *ValidationResult) {
+	dangerousFlags := map[string]string{
+		"--allow-unauthenticated": "installs packages without authentication",
+		"--force":                 "bypasses safety checks",
+		"--dangerous":             "bypasses snap security",
+	}
+	
+	for _, flag := range flags {
+		if warning, isDangerous := dangerousFlags[flag]; isDangerous {
+			result.Add(ValidationError{
+				Type:    "warning",
+				Title:   "potentially dangerous flag",
+				Field:   fmt.Sprintf("packages.%s", manager),
+				Value:   packageName,
+				Message: fmt.Sprintf("flag '%s' %s", flag, warning),
+				Help:    "ensure you understand the security implications",
+				Note:    "this flag reduces security but may be necessary for your use case",
+			})
+		}
+	}
+}
+
+// validateFlagConflicts checks for conflicting flags
+func validateFlagConflicts(flags []string, packageName, manager string, result *ValidationResult) {
+	conflicts := map[string][]string{
+		"flatpak": {"--user", "--system"}, // Can't install both user and system
+	}
+	
+	if conflictingFlags, exists := conflicts[manager]; exists {
+		found := make([]string, 0)
+		for _, flag := range flags {
+			for _, conflictFlag := range conflictingFlags {
+				if flag == conflictFlag {
+					found = append(found, flag)
+				}
+			}
+		}
+		
+		if len(found) > 1 {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "conflicting flags",
+				Field:   fmt.Sprintf("packages.%s", manager),
+				Value:   packageName,
+				Message: fmt.Sprintf("conflicting flags: %v", found),
+				Help:    "choose either --user OR --system, not both",
+			})
+		}
+	}
+}
+
+// suggestCommonFlags suggests commonly needed flags for specific packages
+func suggestCommonFlags(pkg PackageEntry, manager string, result *ValidationResult) {
+	suggestions := map[string]map[string][]string{
+		"snap": {
+			"code":          {"--classic"},
+			"discord":       {},
+			"slack":         {"--classic"},
+			"postman":       {"--classic"},
+			"android-studio": {"--classic"},
+		},
+	}
+	
+	if managerSuggestions, exists := suggestions[manager]; exists {
+		if suggestedFlags, exists := managerSuggestions[pkg.Name]; exists && len(suggestedFlags) > 0 {
+			// Check if package is missing commonly needed flags
+			hasAllSuggested := true
+			for _, suggested := range suggestedFlags {
+				found := false
+				for _, actual := range pkg.Flags {
+					if actual == suggested {
+						found = true
+						break
+					}
+				}
+				if !found {
+					hasAllSuggested = false
+					break
+				}
+			}
+			
+			if !hasAllSuggested && len(pkg.Flags) == 0 {
+				result.Add(ValidationError{
+					Type:       "warning",
+					Title:      "missing common flags",
+					Field:      fmt.Sprintf("packages.%s", manager),
+					Value:      pkg.Name,
+					Message:    fmt.Sprintf("'%s' commonly needs flags: %v", pkg.Name, suggestedFlags),
+					Help:       "consider adding the suggested flags if the package fails to install",
+					Suggestion: fmt.Sprintf("\"%s\":\n  flags: %v", pkg.Name, suggestedFlags),
+				})
+			}
+		}
+	}
+}
+
+// validatePackageDefaults validates the package_defaults section
+func validatePackageDefaults(defaults map[string][]string, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
+	supportedManagers := GetSupportedPackageManagers()
+	
+	for manager, flags := range defaults {
+		// Check if manager is supported
+		supported := false
+		for _, supported_manager := range supportedManagers {
+			if manager == supported_manager {
+				supported = true
+				break
+			}
+		}
+		
+		if !supported {
+			result.Add(ValidationError{
+				Type:       "error",
+				Title:      "unsupported package manager",
+				Field:      fmt.Sprintf("package_defaults.%s", manager),
+				Value:      manager,
+				Message:    fmt.Sprintf("'%s' is not a supported package manager", manager),
+				Help:       fmt.Sprintf("use one of: %v", supportedManagers),
+				Suggestion: "remove this entry or check for typos",
+			})
+		}
+		
+		// Validate the flags themselves
+		validateFlagSafety(flags, fmt.Sprintf("(defaults for %s)", manager), manager, result)
+		validateFlagConflicts(flags, fmt.Sprintf("(defaults for %s)", manager), manager, result)
 	}
 }
 

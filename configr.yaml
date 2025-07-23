@@ -1,15 +1,29 @@
 version: "1.0"
 
+# Example configuration demonstrating the three-tier flag system
+# Configr provides intelligent defaults, but you can customize as needed
+
+# Optional: Global package manager defaults
+# These override configr's internal defaults for all packages
+package_defaults:
+  apt: ["-y"]                        # Override internal: less opinionated  
+  flatpak: ["--user"]                # Override internal: prefer user installs
+  # snap: []                         # Use internal defaults (empty)
+
 packages:
   apt:
-    - git
-    - curl
-    - vim
+    - git                            # Uses: ["-y"] from package_defaults
+    - curl                           # Uses: ["-y"] from package_defaults
+    - vim                            # Uses: ["-y"] from package_defaults
+  
   flatpak:
-    - org.mozilla.firefox
-    - com.visualstudio.code
+    - org.mozilla.firefox            # Uses: ["--user"] from package_defaults
+    - com.visualstudio.code          # Uses: ["--user"] from package_defaults
+  
   snap:
-    - discord
+    - discord                        # Uses: [] (internal default)
+    - "code":                        # Override: requires --classic for filesystem access
+        flags: ["--classic"]
 
 dconf:
   settings:
