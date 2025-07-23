@@ -2,7 +2,7 @@
 
 ## Summary
 
-Written by the staff member "Gopher", it will be an application written in go that will be a scaled down version of desktop linux (Ubuntu) configuration management. Akin to something like an Ansible that is in a single binary.
+Written by the staff member "Gopher", this application will be a scaled-down version of desktop Linux (Ubuntu) configuration management, akin to Ansible, but in a single binary.
 
 ## Application Name
 
@@ -11,25 +11,25 @@ Written by the staff member "Gopher", it will be an application written in go th
 
 ## Desired Features/Behaviours
 
-These are meant to be implimented one by one when indicated to do so
+These are meant to be implemented one by one when indicated to do so
 
 - apt package management
-- flatpak package management
-- snap package management
+- Flatpak package management
+- Snap package management
 - dconf configuration management
 - dotfile configuration management
-- system level dotfiles (think /etc and the like) configuration management
+- System-level dotfiles (think /etc and the like) configuration management
 - init command that will ensure any of the tools (such as apt, flatpak, snapd, etc) are installed
-- the config file will be written in yaml (defining packages to install, etc)
+- The config file will be written in yaml (defining packages to install, etc)
 - yaml validation/linting/schema validation
-- proper validation as to what is and is not installed, what is managed by configr, with the intent to speed up tool runs rather that just erroring out if the package is already installed. Maybe a cache? Open to suggestions on how to impliment. Idea. yaml is converted to a faster to parse format when you "save" it. Then that result is cached and the "state" is saved. And maybe instructions are added to the state file. If state is correupted, or lost, a state is gnerated new assuming all needs to be run. But need good output handling as the tools either error under the hood (ie package is already installed, etc)
-- when an application or config file is removed from the config, it should be removed from the system on the next run.
+- proper validation as to what is and is not installed, what is managed by configr, with the intent to speed up tool runs rather than just erroring out if the package is already installed. Maybe a cache? Open to suggestions on how to implement. Idea. yaml is converted to a faster-to-parse format when you "save" it. Then that result is cached and the "state" is saved. Instructions could also be added to the state file. If a state is corrupted or lost, a new state is generated, assuming all necessary components are run. However, it needs good output handling, as the tools either error under the hood (e.g., package is already installed, etc.).
+- When an application or config file is removed from the config, it should be removed from the system on the next run.
 - config files should be symlinked into place, first warning that a file is in the way, then optionally choosing via "yes/no" to backup existing files that are in the way and replace with the symlink, or skip, maintaining the existing file.
-- If an application (and config file by association) is removed, the system should check if there was a backed up config file and restore it
-- we will simply shell out to tools on the system. These same tools should be checked for on init, and offer to install them
-- for the config files, there should be a configr.yaml that is the root. But optionally you should be able to "include" additional yaml files in case a user would like to split things into additional files. This is under consideration.
-- extreemly easy to decipher and action on error messages for the end user. A good example is how good Rust error reporting is.
-- exceptional end user feedback and experience. Think colour output, emoji icons, spinners, good but simple to read output. Not every verbose unless the verbose option is enabled.
+- If an application (and config file by association) is removed, the system should check if there was a backed-up config file and restore it
+- We will shell out to tools on the system. These same tools should be checked for on init, and an offer to install them
+- For the config files, there should be a configr.yaml that is the root. But optionally, you should be able to "include" additional yaml files in case a user would like to split things into further files.
+- Extremely easy to decipher and act on error messages for the end user. A good example is how effective Rust error reporting is.
+- exceptional end user feedback and experience. Think of colour output, emoji icons, spinners, and good, yet simple-to-read output. Not every verbose unless the verbose option is enabled.
 
 ## External GO Libraries or tools
 
@@ -40,22 +40,22 @@ These are meant to be implimented one by one when indicated to do so
 
 - [glow](https://github.com/charmbracelet/glow) can be used to render markdown if needed
 - [charmbracelet/fang: The CLI starter kit](https://github.com/charmbracelet/fang) to improve Cobra
-- [charmbracelet/log: A minimal, colorful Go logging library 🪵](https://github.com/charmbracelet/log)
+- [charmbracelet/log: A minimal, colourful Go logging library 🪵](https://github.com/charmbracelet/log)
 - https://github.com/charmbracelet/huh can be used to build terminal forms and prompts
 - https://github.com/charmbracelet/skate can be used if a key/value store is needed.
-- Other libraries yet to be determined. Open to suggestoins if there are real gains.
+- Other libraries yet to be determined. Open to suggestions if there are real gains.
 
-## Gaurdrails
+## Guardrails
 
-- do not impliment multiple features at a time unless there is a dependency, or asked to
-- have proper error handling
-- have proper stdout/stderr from the external tools
-- anytime I ask for docs to be updated, update the readme from the enduser POV (docs), and the architecture section in claude.md as to what we are doing and why.
-- favour patterns and methods already implimented for consistency. However if there is a more efficient way, make a suggestion. If feasible when changing the pattern, keep it consistent everywhere.
+- Do not implement multiple features at a time unless there is a dependency, or asked to
+- Have proper error handling
+- Have proper stdout/stderr from the external tools
+- Anytime I ask for docs to be updated, update the readme from the enduser POV (docs), and the architecture section in Claude.md, as to what we are doing and why.
+- favour patterns and methods already implemented for consistency. However, if there is a more efficient way, please suggest it. If feasible, when changing the pattern, maintain consistency everywhere.
 
 ## Command patterns
 
-- follow cobra best practices which it comes to verbs, etc.
+- Follow Cobra best practices when it comes to verbs, etc.
 
 ## Architecture
 
