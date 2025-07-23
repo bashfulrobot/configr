@@ -1,5 +1,9 @@
 # Configr
 
+** WORK IN PROGRESS - NOT WORKING, HEAVY DEV. **
+
+-----------------------------------------------------
+
 A single binary configuration management tool for Ubuntu desktop systems. Configr provides package management, configuration file management, and desktop settings management similar to Ansible but contained in a single binary.
 
 **Key Differentiators:**
