@@ -22,11 +22,12 @@ var applyCmd = &cobra.Command{
 	Long: `Apply loads and applies the configuration to your system.
 
 This command will:
+- Add APT and Flatpak repositories
 - Deploy and symlink files to their destinations
 - Install APT packages
 - Create backups of existing files when requested
 
-Note: Repository management, Flatpak, Snap, and DConf are not yet implemented.
+Note: Flatpak packages, Snap, and DConf are not yet implemented.
 
 By default, it looks for 'configr.yaml' in standard locations.`,
 	Example: `  configr apply                       # Apply default config
@@ -106,6 +107,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	// Get config directory for relative path resolution
 	configDir := filepath.Dir(configPath)
+
+	// Apply repository configurations first (may be needed for package installations)
+	if err := applyRepositoryConfigurations(cfg, logger, dryRun); err != nil {
+		return fmt.Errorf("failed to apply repository configurations: %w", err)
+	}
 
 	// Apply file configurations
 	if len(cfg.Files) > 0 {
@@ -188,6 +194,26 @@ func applyPackageConfigurations(cfg *config.Config, logger *log.Logger, dryRun b
 	// TODO: Handle Snap packages (when implemented)  
 	if len(cfg.Packages.Snap) > 0 {
 		logger.Warn("Snap management not yet implemented - skipping snap packages")
+	}
+
+	return nil
+}
+
+// applyRepositoryConfigurations handles repository management for all supported repository types
+func applyRepositoryConfigurations(cfg *config.Config, logger *log.Logger, dryRun bool) error {
+	// Check if there are any repositories to process
+	if len(cfg.Repositories.Apt) == 0 && len(cfg.Repositories.Flatpak) == 0 {
+		logger.Debug("No repositories to process")
+		return nil
+	}
+
+	logger.Debug("Applying repository configurations", 
+		"apt_count", len(cfg.Repositories.Apt), 
+		"flatpak_count", len(cfg.Repositories.Flatpak))
+	
+	repoManager := pkg.NewRepositoryManager(logger, dryRun)
+	if err := repoManager.AddRepositories(cfg.Repositories); err != nil {
+		return fmt.Errorf("repository management failed: %w", err)
 	}
 
 	return nil

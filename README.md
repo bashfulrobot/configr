@@ -2,8 +2,8 @@
 
 A single binary configuration management tool for Ubuntu desktop systems. Configr provides package management, configuration file management, and desktop settings management similar to Ansible but contained in a single binary.
 
-✅ **Currently Implemented**: APT package management, File management, Configuration validation  
-🚧 **In Development**: Repository management (schema complete), Flatpak and Snap management, DConf settings
+✅ **Currently Implemented**: APT package management, Repository management, File management, Configuration validation  
+🚧 **In Development**: Flatpak and Snap package management, DConf settings
 
 **Key Differentiators:**
 - **Professional CLI**: Styled help pages and documentation via charmbracelet/fang
@@ -52,7 +52,7 @@ sudo mv _configr /usr/local/share/zsh/site-functions/
 ```yaml
 version: "1.0"
 
-# Optional: Add package repositories (schema ready, implementation in progress)
+# Optional: Add package repositories
 repositories:
   apt:
     python39:
@@ -128,7 +128,7 @@ configr --help
 
 Configr uses YAML configuration files with five main sections:
 
-- `repositories`: Package repositories to add (APT PPAs, Flatpak remotes) - schema only
+- `repositories`: Package repositories to add (APT PPAs, Flatpak remotes)
 - `packages`: Software to install via package managers (APT implemented)
 - `files`: Configuration files to deploy
 - `dconf`: GNOME desktop settings (planned)
@@ -231,8 +231,6 @@ packages:
 - Flatpak will allow `--user` vs `--system` installation choices - when implemented
 
 ### Repository Management
-
-🚧 **Schema Complete, Implementation In Progress**: You can define repositories in YAML, but configr won't manage them yet.
 
 Configr supports managing package repositories for both APT and Flatpak:
 

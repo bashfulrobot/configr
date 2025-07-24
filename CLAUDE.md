@@ -16,15 +16,15 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 **✅ Implemented (Production Ready):**
 
 - APT package management (repository + local .deb files)
+- Repository management (APT PPAs/custom repos + Flatpak remotes)
 - File management system (symlink/copy modes with backup)
 - Configuration validation with Rust-style error reporting
 - Three-tier package flag system
 - Professional CLI with charmbracelet/fang integration
-- Comprehensive test coverage (94+ tests)
+- Comprehensive test coverage (100+ tests)
 
 **🚧 In Development:**
 
-- Repository management (APT + Flatpak) - schema and validation complete
 - Flatpak package management
 - Snap package management
 - DConf configuration management
@@ -333,6 +333,37 @@ return config.GetDefaultFlags("apt")
 - Clean, readable output suitable for system administration
 - Automatic features without additional maintenance code
 
+#### Repository Management System
+
+**Core Components:**
+
+- **RepositoryManager (`internal/pkg/repositories.go`)** - Central orchestrator for repository operations
+- **APT repository support**: PPA and custom repository management via `add-apt-repository`
+- **Flatpak repository support**: Remote management via `flatpak remote-add`
+- **GPG key handling**: Automatic key installation from URLs or keyservers
+- **Command availability checks**: Validates required tools are installed before operation
+
+**Key Implementation Details:**
+
+- **PPA Support**: Uses `add-apt-repository ppa:user/repo` for Ubuntu PPAs
+- **Custom APT Repos**: Supports full `sources.list` format with optional GPG keys
+- **Flatpak Remotes**: Manages `.flatpakrepo` files with user/system installation options
+- **GPG Key Management**: Handles both HTTPS URLs (`.gpg`/`.asc`) and keyserver key IDs
+- **Dry-run Support**: Preview repository changes without making system modifications
+- **Error Handling**: Clear feedback with specific installation requirements
+
+**APT Repository Features:**
+- PPA format validation (`user/repo`)
+- Custom repository URI validation (must start with `deb`/`deb-src`)
+- GPG key validation (HTTPS URLs or hex key IDs)
+- Automatic key installation before repository addition
+
+**Flatpak Repository Features:**
+- Repository URL validation (HTTPS enforcement for security)
+- Remote name validation (alphanumeric with hyphens/underscores)
+- User vs system installation control
+- `--if-not-exists` flag to prevent duplicate remotes
+
 ### 🚧 In Development Features
 
 *Reserved for future implementation status updates*
@@ -341,8 +372,6 @@ return config.GetDefaultFlags("apt")
 
 #### Advanced Package Management
 
-- **APT repository management**: Add/remove repositories
-- **Flatpak repository management**: Remote repository configuration
 - **Package removal**: Remove packages when removed from configuration
 - **State caching**: Convert YAML to faster-to-parse format with state tracking
 - **Installation optimization**: Cache system to speed up repeated runs
