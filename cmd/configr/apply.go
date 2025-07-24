@@ -24,11 +24,9 @@ var applyCmd = &cobra.Command{
 This command will:
 - Add APT and Flatpak repositories
 - Deploy and symlink files to their destinations
-- Install APT packages
+- Install APT, Flatpak, and Snap packages
 - Apply dconf settings for desktop configuration
 - Create backups of existing files when requested
-
-Note: Flatpak packages and Snap packages are not yet implemented.
 
 By default, it looks for 'configr.yaml' in standard locations.`,
 	Example: `  configr apply                       # Apply default config
@@ -197,14 +195,34 @@ func applyPackageConfigurations(cfg *config.Config, logger *log.Logger, dryRun b
 		}
 	}
 
-	// TODO: Handle Flatpak packages (when implemented)
+	// Handle Flatpak packages
 	if len(cfg.Packages.Flatpak) > 0 {
-		logger.Warn("Flatpak management not yet implemented - skipping flatpak packages")
+		logger.Debug("Applying Flatpak package configurations", "count", len(cfg.Packages.Flatpak))
+		flatpakManager := pkg.NewFlatpakManager(logger, dryRun)
+		
+		// Validate Flatpak package names
+		if err := flatpakManager.ValidatePackageNames(cfg.Packages.Flatpak); err != nil {
+			return fmt.Errorf("Flatpak package validation failed: %w", err)
+		}
+		
+		if err := flatpakManager.InstallPackages(cfg.Packages.Flatpak, cfg.PackageDefaults); err != nil {
+			return fmt.Errorf("Flatpak package installation failed: %w", err)
+		}
 	}
 
-	// TODO: Handle Snap packages (when implemented)  
+	// Handle Snap packages
 	if len(cfg.Packages.Snap) > 0 {
-		logger.Warn("Snap management not yet implemented - skipping snap packages")
+		logger.Debug("Applying Snap package configurations", "count", len(cfg.Packages.Snap))
+		snapManager := pkg.NewSnapManager(logger, dryRun)
+		
+		// Validate Snap package names
+		if err := snapManager.ValidatePackageNames(cfg.Packages.Snap); err != nil {
+			return fmt.Errorf("Snap package validation failed: %w", err)
+		}
+		
+		if err := snapManager.InstallPackages(cfg.Packages.Snap, cfg.PackageDefaults); err != nil {
+			return fmt.Errorf("Snap package installation failed: %w", err)
+		}
 	}
 
 	return nil
