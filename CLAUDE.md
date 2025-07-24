@@ -339,3 +339,74 @@ func main() {
 ```
 
 This transformation aligns perfectly with the requirement for "exceptional end user feedback and experience" while maintaining code simplicity.
+
+#### File Management Implementation
+
+The file management system has been fully implemented with a comprehensive, production-ready approach that follows the unified file management design specified above.
+
+**Core Components:**
+
+1. **FileManager (`internal/pkg/files.go`)** - Central orchestrator for all file operations:
+   - **Symlink-based deployment**: Creates symlinks from config directory to destination paths
+   - **Path resolution**: Handles relative paths, absolute paths, and `~` user expansion
+   - **Backup system**: Timestamped backups of existing files before replacement
+   - **Permission management**: Sets owner, group, and mode when specified
+   - **Dry-run support**: Preview changes without applying them to the system
+   - **Safety checks**: Permission validation and path safety verification
+
+2. **Validation Integration** - File-specific validation is integrated into the existing validation system:
+   - **Source file existence**: Verifies source files exist before deployment
+   - **Destination path safety**: Prevents unsafe paths like `../../../etc/passwd`
+   - **Permission validation**: Validates file modes (e.g., warns about overly permissive `777`)
+   - **Owner/group validation**: Checks user and group names/IDs are valid
+   - **Rust-style error reporting**: Clear, actionable error messages with suggestions
+
+3. **Apply Command (`cmd/configr/apply.go`)** - Main entry point for system changes:
+   - **Configuration loading**: Uses existing loader with include support
+   - **Comprehensive validation**: Validates configuration before any changes
+   - **File deployment**: Orchestrates file operations via FileManager
+   - **Progress reporting**: Clear logging with success/error indicators
+   - **Integration ready**: Prepared for package and dconf management when implemented
+
+**Key Implementation Details:**
+
+**Symlink Strategy**: Files are deployed as symlinks rather than copies, providing several advantages:
+- **Live updates**: Changes to source files are immediately reflected
+- **Clear ownership**: Easy to identify configr-managed files
+- **Safe removal**: When removing files, symlinks can be safely deleted
+- **Backup restoration**: Original files can be restored when symlinks are removed
+
+**Path Resolution Hierarchy**:
+1. **Absolute paths**: Used as-is (`/etc/hosts`)
+2. **Home expansion**: `~/` becomes user's home directory
+3. **User expansion**: `~username/` becomes specified user's home
+4. **Relative paths**: Resolved relative to configuration file directory
+
+**Backup System**:
+- **Timestamped backups**: Format `filename.backup.YYYYMMDD-HHMMSS`
+- **Automatic restore**: When removing files, most recent backup is restored
+- **Optional behavior**: Controlled by `backup: true/false` in configuration
+- **Conflict handling**: Warns about existing files, allows user choice
+
+**Permission Management**:
+- **Selective application**: Only sets owner/group/mode when explicitly specified
+- **Preservation**: Omitted attributes preserve existing file attributes
+- **Root detection**: Warns when ownership changes require root privileges
+- **Security awareness**: Validates and warns about overly permissive modes
+
+**Error Handling and UX**:
+- **Comprehensive validation** before any system changes
+- **Dry-run mode** for safe preview of all operations
+- **Clear progress indicators** with emoji and colored output
+- **Detailed error reporting** with specific file paths and suggested fixes
+- **Graceful degradation** - continues with other files if one fails
+
+**Testing Coverage**:
+The implementation includes comprehensive tests covering:
+- Path resolution (source and destination)
+- Dry-run vs real deployment behavior
+- Backup creation and restoration
+- Permission validation and setting
+- Error handling and edge cases
+
+This implementation fully supports the file management specification while providing a robust, user-friendly experience that aligns with configr's goals of exceptional UX and system administrator-friendly operation.

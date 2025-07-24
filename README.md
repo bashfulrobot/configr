@@ -97,7 +97,17 @@ dconf:
 configr validate
 ```
 
-3. **Check available commands**:
+3. **Apply your configuration**:
+
+```bash
+# Preview changes first (recommended)
+configr apply --dry-run
+
+# Apply the configuration
+configr apply
+```
+
+4. **Check available commands**:
 
 ```bash
 configr --help
@@ -330,6 +340,7 @@ Configr features a professional CLI interface with styled help pages and compreh
 ### Core Commands
 
 - `configr validate [file]` - Validate configuration without applying changes
+- `configr apply [file]` - Apply configuration changes to your system
 - `configr help [command]` - Show help for any command
 
 ### Documentation & Setup
@@ -358,11 +369,17 @@ Configr features a professional CLI interface with styled help pages and compreh
 # Validate default configuration
 configr validate
 
-# Validate specific file with verbose output
-configr validate my-config.yaml --verbose
+# Apply configuration changes to system
+configr apply
+
+# Preview changes without applying them (dry-run)
+configr apply --dry-run
+
+# Apply specific configuration file
+configr apply my-config.yaml --verbose
 
 # Use custom config file location
-configr --config /path/to/config.yaml validate
+configr --config /path/to/config.yaml apply
 ```
 
 **Documentation & Setup:**
