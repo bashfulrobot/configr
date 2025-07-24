@@ -2,8 +2,7 @@
 
 A single binary configuration management tool for Ubuntu desktop systems. Configr provides package management, configuration file management, and desktop settings management similar to Ansible but contained in a single binary.
 
-✅ **Currently Implemented**: APT package management, Repository management, File management, DConf settings, Configuration validation  
-🚧 **In Development**: Flatpak and Snap package management
+✅ **Currently Implemented**: APT, Flatpak, and Snap package management, Repository management, File management, DConf settings, Configuration validation
 
 **Key Differentiators:**
 - **Professional CLI**: Styled help pages and documentation via charmbracelet/fang
@@ -12,7 +11,7 @@ A single binary configuration management tool for Ubuntu desktop systems. Config
 
 ## Features
 
-- **Smart Package Management**: Three-tier flag system with intelligent defaults for APT (Flatpak and Snap planned)
+- **Smart Package Management**: Three-tier flag system with intelligent defaults for APT, Flatpak, and Snap
 - **File Management**: Deploy and manage configuration files (dotfiles, system files) with symlinks
 - **Desktop Configuration**: DConf settings management for any application using dconf
 - **Modular Configuration**: Split configurations across multiple YAML files with includes
@@ -72,11 +71,12 @@ packages:
     - curl
     - vim
     - build-essential
-  # flatpak and snap management not yet implemented
-  # flatpak:
-  #   - org.mozilla.firefox
-  # snap:
-  #   - discord
+  flatpak:
+    - org.mozilla.Firefox
+    - com.spotify.Client
+  snap:
+    - discord
+    - code
 
 files:
   vimrc:
@@ -129,7 +129,7 @@ configr --help
 Configr uses YAML configuration files with five main sections:
 
 - `repositories`: Package repositories to add (APT PPAs, Flatpak remotes)
-- `packages`: Software to install via package managers (APT implemented)
+- `packages`: Software to install via package managers (APT, Flatpak, and Snap)
 - `files`: Configuration files to deploy
 - `dconf`: Desktop settings for any application using dconf
 - `includes`: Additional configuration files to merge
@@ -151,11 +151,12 @@ packages:
     - git                            # Uses intelligent defaults  
     - curl
     - build-essential
-  # Note: Flatpak and Snap management not yet implemented
-  # flatpak:
-  #   - org.mozilla.firefox
-  # snap: 
-  #   - discord
+  flatpak:
+    - org.mozilla.Firefox            # Firefox web browser
+    - com.spotify.Client             # Spotify music player
+  snap: 
+    - discord                        # Discord chat application
+    - code                           # Visual Studio Code editor
 ```
 
 **Advanced Flag Control:**
@@ -164,8 +165,8 @@ packages:
 # Optional: Override default flags globally
 package_defaults:
   apt: ["-y"]                        # Less opinionated than internal defaults
-  # flatpak: ["--user"]              # Will be used when flatpak is implemented
-  # snap: []                         # Will be used when snap is implemented
+  flatpak: ["--user"]                # Install Flatpaks for user only
+  snap: ["--classic"]                # Enable classic confinement by default
 
 packages:
   apt:
@@ -176,22 +177,25 @@ packages:
         flags: ["-y", "--force-depends"]
     - "/opt/downloads/package.deb"   # Absolute path .deb file
         
-  # Flatpak and Snap management not yet implemented
-  # flatpak:
-  #   - org.mozilla.firefox            # Will use: ["--user"] from package_defaults
-  #   - "com.spotify.Client":          # Override to system install  
-  #       flags: ["--system"]
-  #       
-  # snap:
-  #   - discord                        # Will use: [] (internal default)
-  #   - "slack":                       # Requires --classic for desktop integration
-  #       flags: ["--classic"]
+  flatpak:
+    - org.mozilla.Firefox            # Uses: ["--user"] from package_defaults
+    - "com.spotify.Client":          # Override to system install  
+        flags: ["--system"]
+    - "org.gimp.GIMP":               # GIMP image editor
+        flags: ["--user", "--or-update"]
+        
+  snap:
+    - discord                        # Uses: ["--classic"] from package_defaults
+    - "code":                        # Visual Studio Code
+        flags: ["--classic"]         # Explicit classic confinement
+    - "hello":                       # Simple snap (no special flags needed)
+        flags: []
 ```
 
 **Internal Default Flags (no configuration needed):**
 - **APT**: `["-y", "--no-install-recommends"]` - Non-interactive, minimal installs
-- **Snap**: `[]` - (Not implemented yet) No defaults, snaps are interactive by design
-- **Flatpak**: `["--system", "--assumeyes"]` - (Not implemented yet) System-wide, non-interactive
+- **Flatpak**: `["--system", "--assumeyes"]` - System-wide, non-interactive installs
+- **Snap**: `[]` - No defaults, snaps are interactive by design to prompt for permissions
 
 **APT Package Management:**
 
@@ -225,10 +229,68 @@ packages:
 - **State checking**: Avoids reinstalling already installed packages
 - **Path validation**: Prevents malicious .deb paths with security checks
 
+**Flatpak Package Management:**
+
+Configr provides comprehensive Flatpak support for application installation:
+
+```yaml
+packages:
+  flatpak:
+    # Standard applications
+    - org.mozilla.Firefox
+    - com.spotify.Client
+    - org.gimp.GIMP
+    
+    # With custom flags
+    - "org.blender.Blender":
+        flags: ["--user", "--or-update"]
+    
+    # KDE applications
+    - org.kde.krita
+    - org.kde.kdenlive
+```
+
+**Flatpak Features:**
+- **Application ID validation**: Enforces reverse domain notation (org.mozilla.Firefox)
+- **User vs system installation**: Control installation scope with `--user` or `--system`
+- **Update handling**: Use `--or-update` to update existing installations
+- **Smart grouping**: Groups applications by flags to minimize system calls
+- **State checking**: Avoids reinstalling already installed applications
+
+**Snap Package Management:**
+
+Configr provides comprehensive Snap support for package installation:
+
+```yaml
+packages:
+  snap:
+    # Standard packages
+    - discord
+    - hello
+    - snap-store
+    
+    # Applications requiring classic confinement
+    - "code":
+        flags: ["--classic"]
+    - "slack":
+        flags: ["--classic"]
+    
+    # Development tools
+    - "postman":
+        flags: ["--classic"]
+```
+
+**Snap Features:**
+- **Package name validation**: Enforces Snap naming conventions (lowercase, hyphens)
+- **Classic confinement support**: Many desktop apps need `--classic` for filesystem access
+- **Individual installation**: Handles one package at a time (Snap design limitation)
+- **State checking**: Avoids reinstalling already installed packages
+- **Interactive prompts**: Respects Snap's interactive permission model
+
 **Common Flag Examples:**
-- APT supports `--install-suggests`, `--allow-unauthenticated`, `--force-depends`, etc.
-- Snap packages will often need `--classic` for filesystem access (`code`, `slack`, `postman`) - when implemented
-- Flatpak will allow `--user` vs `--system` installation choices - when implemented
+- **APT**: `--install-suggests`, `--allow-unauthenticated`, `--force-depends`
+- **Flatpak**: `--user` vs `--system`, `--or-update`, `--assumeyes`
+- **Snap**: `--classic` for desktop apps, `--devmode` for development, `--dangerous` for local installs
 
 ### Repository Management
 

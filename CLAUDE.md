@@ -16,18 +16,15 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 **✅ Implemented (Production Ready):**
 
 - APT package management (repository + local .deb files)
+- Flatpak package management (application installation with reverse domain validation)
+- Snap package management (package installation with naming convention validation)
 - Repository management (APT PPAs/custom repos + Flatpak remotes)
 - File management system (symlink/copy modes with backup)
 - DConf configuration management (desktop settings for any dconf-using application)
 - Configuration validation with Rust-style error reporting
 - Three-tier package flag system
 - Professional CLI with charmbracelet/fang integration
-- Comprehensive test coverage (130+ tests)
-
-**🚧 In Development:**
-
-- Flatpak package management
-- Snap package management
+- Comprehensive test coverage (170+ tests)
 
 **📋 Planned Features:**
 
@@ -401,6 +398,72 @@ return config.GetDefaultFlags("apt")
 - GNOME Applications (Terminal, Nautilus, Text Editor, etc.)
 - GTK Applications (any app using GSettings/dconf)
 - Third-party applications (Guake, etc.)
+
+#### Flatpak Package Management
+
+**Core Components:**
+
+- **FlatpakManager (`internal/pkg/flatpak.go`)** - Central orchestrator for Flatpak application management
+- **Universal application support**: Manages any Flatpak application with reverse domain notation
+- **Three-tier flag resolution**: Supports per-package, user defaults, and internal defaults
+- **Smart grouping**: Groups applications by flags to minimize system calls
+- **State management**: Checks installation status to avoid unnecessary operations
+
+**Key Implementation Details:**
+
+- **Application Installation**: Uses `flatpak install` with comprehensive flag support
+- **Reverse Domain Validation**: Enforces proper application ID format (org.mozilla.Firefox)
+- **Scope Management**: Supports both user (`--user`) and system (`--system`) installations
+- **Update Handling**: Supports `--or-update` flag for existing application updates
+- **Dry-run Support**: Preview changes without modifying system state
+
+**Flatpak Features:**
+- Application ID validation with reverse domain notation enforcement
+- User vs system installation scope control
+- Smart package grouping by resolved flags
+- State checking to prevent duplicate installations
+- Integration with existing three-tier flag system
+
+**Advanced Operations:**
+- `InstallPackages()`: Install applications with flag resolution
+- `UninstallPackage()`: Remove applications with custom flags
+- `ListInstalledPackages()`: Enumerate installed applications
+- `UpdatePackages()`: Update all installed applications
+- `ValidatePackageNames()`: Pre-validate application IDs
+
+#### Snap Package Management
+
+**Core Components:**
+
+- **SnapManager (`internal/pkg/snap.go`)** - Central orchestrator for Snap package management
+- **Universal package support**: Manages any Snap package with naming convention validation
+- **Three-tier flag resolution**: Supports per-package, user defaults, and internal defaults
+- **Individual installation**: Handles packages one at a time (Snap design requirement)
+- **State management**: Checks installation status to avoid unnecessary operations
+
+**Key Implementation Details:**
+
+- **Package Installation**: Uses `snap install` with comprehensive flag support
+- **Name Validation**: Enforces Snap naming conventions (lowercase, hyphens, length limits)
+- **Classic Confinement**: Special handling for applications requiring `--classic` flag
+- **Interactive Model**: Respects Snap's interactive permission prompting design
+- **Dry-run Support**: Preview changes without modifying system state
+
+**Snap Features:**
+- Package name validation with Snap naming convention enforcement
+- Classic confinement support for desktop applications
+- Individual package installation (Snap limitation)
+- State checking to prevent duplicate installations
+- Integration with existing three-tier flag system
+
+**Advanced Operations:**
+- `InstallPackages()`: Install packages with flag resolution and individual handling
+- `UninstallPackage()`: Remove packages with custom flags
+- `ListInstalledPackages()`: Enumerate installed packages
+- `RefreshPackages()`: Update all installed packages
+- `InfoPackage()`: Get detailed package information
+- `FindPackage()`: Search for available packages
+- `ValidatePackageNames()`: Pre-validate package names
 
 ### 🚧 In Development Features
 
