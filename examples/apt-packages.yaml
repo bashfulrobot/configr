@@ -1,0 +1,52 @@
+version: "1.0"
+
+# Example configuration showcasing APT package management features
+
+# Optional: Override internal default flags globally
+package_defaults:
+  apt: ["-y", "--install-suggests"]  # More comprehensive than internal defaults
+
+packages:
+  apt:
+    # Simple package installations (use package_defaults.apt flags)
+    - git
+    - curl
+    - vim
+    - htop
+    - tree
+    
+    # Development tools with default flags
+    - build-essential
+    - nodejs
+    - python3-pip
+    
+    # Packages with custom flags (override defaults)
+    - "docker.io":
+        flags: ["-y", "--no-install-recommends"]  # Minimal installation
+    
+    - "nginx":
+        flags: ["-y", "--install-suggests", "--install-recommends"]  # Full installation
+        
+    # Local .deb file installation
+    - "./downloads/custom-package.deb":
+        flags: ["-y"]
+        
+    - "/home/user/packages/proprietary-app.deb":
+        flags: ["--force-depends", "-y"]
+
+# Example with files and dconf for a complete system setup
+files:
+  vimrc:
+    source: "dotfiles/.vimrc"
+    destination: "~/.vimrc"
+    backup: true
+    
+  gitconfig:
+    source: "dotfiles/.gitconfig"
+    destination: "~/.gitconfig"
+    backup: true
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/wm/preferences/theme": "'Adwaita-dark'"

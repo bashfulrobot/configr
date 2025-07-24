@@ -1,0 +1,15 @@
+version: "1.0"
+
+# Simple APT package management example
+
+packages:
+  apt:
+    # Basic packages using internal defaults: ["-y", "--no-install-recommends"]
+    - git
+    - curl
+    - vim
+    - htop
+    
+    # Package with custom flags
+    - "nginx":
+        flags: ["-y", "--install-suggests"]

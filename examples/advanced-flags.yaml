@@ -20,6 +20,11 @@ packages:
     - "mysql-server":                     # Tier 3: Careful installation for database
         flags: ["-y", "--no-install-recommends"]
     - build-essential                     # Uses package_defaults
+    
+    # Local .deb file installations  
+    - "./packages/custom-app.deb":        # Tier 3: Local package with specific flags
+        flags: ["-y", "--force-depends"]
+    - "/opt/downloads/proprietary.deb"    # Uses: ["-y", "--allow-unauthenticated"] from package_defaults
 
   # Flatpak applications with user/system choices
   flatpak:
