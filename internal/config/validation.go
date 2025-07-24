@@ -285,6 +285,11 @@ func sanitizePackageName(name string) string {
 func isValidPackageNameForManager(name, manager string) bool {
 	switch manager {
 	case "apt":
+		// Check if it's a local .deb file
+		if strings.HasSuffix(name, ".deb") {
+			// If it ends with .deb, it must be a valid file path
+			return isValidDebFilePath(name)
+		}
 		// APT package names: lowercase, numbers, hyphens, dots, plus signs
 		matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9\-\.\+]*$`, name)
 		return matched
@@ -306,7 +311,7 @@ func isValidPackageNameForManager(name, manager string) bool {
 func getPackageNameValidationMessage(manager string) string {
 	switch manager {
 	case "apt":
-		return "APT package name contains invalid characters"
+		return "APT package name or .deb file path contains invalid characters"
 	case "flatpak":
 		return "Flatpak app ID contains invalid characters"
 	case "snap":
@@ -569,4 +574,31 @@ func suggestAlternativeFile(path string) string {
 	}
 	
 	return ""
+}
+
+// isValidDebFilePath validates a local .deb file path
+func isValidDebFilePath(debPath string) bool {
+	// Must end with .deb
+	if !strings.HasSuffix(debPath, ".deb") {
+		return false
+	}
+	
+	// Must contain a path separator (absolute or relative path)
+	if !strings.Contains(debPath, "/") {
+		return false
+	}
+	
+	// Basic path sanitization - no path traversal
+	if strings.Contains(debPath, "..") {
+		return false
+	}
+	
+	// Extract filename and check it's not just ".deb"
+	parts := strings.Split(debPath, "/")
+	filename := parts[len(parts)-1]
+	if filename == ".deb" {
+		return false
+	}
+	
+	return true
 }
