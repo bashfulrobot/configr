@@ -12,9 +12,9 @@ A single binary configuration management tool for Ubuntu desktop systems. Config
 
 ## Features
 
-- **Smart Package Management**: Three-tier flag system with intelligent defaults for APT, Flatpak, and Snap
+- **Smart Package Management**: Three-tier flag system with intelligent defaults for APT (Flatpak and Snap planned)
 - **File Management**: Deploy and manage configuration files (dotfiles, system files) with symlinks
-- **Desktop Configuration**: Manage GNOME dconf settings
+- **Desktop Configuration**: GNOME dconf settings management (planned)
 - **Modular Configuration**: Split configurations across multiple YAML files with includes
 - **Backup Support**: Automatic backup of existing files before replacement
 - **Professional CLI**: Styled help pages, auto-completion, and man page generation
@@ -71,13 +71,12 @@ packages:
     - git                            # Uses: ["-y"] from package_defaults
     - curl
     - vim
-  flatpak:
-    - org.mozilla.firefox            # Uses: ["--user"] from package_defaults
-    - com.visualstudio.code
-  snap:
-    - discord                        # Uses: [] (internal default)
-    - "code":                        # Override: needs --classic
-        flags: ["--classic"]
+    - build-essential
+  # flatpak and snap management not yet implemented
+  # flatpak:
+  #   - org.mozilla.firefox
+  # snap:
+  #   - discord
 
 files:
   vimrc:
@@ -94,10 +93,11 @@ files:
     backup: true
     copy: true      # Copy for system files
 
-dconf:
-  settings:
-    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
-    "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
+# DConf settings management not yet implemented
+# dconf:
+#   settings:
+#     "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+#     "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
 ```
 
 2. **Validate your configuration**:
@@ -128,10 +128,10 @@ configr --help
 
 Configr uses YAML configuration files with five main sections:
 
-- `repositories`: Package repositories to add (APT PPAs, Flatpak remotes)
-- `packages`: Software to install via package managers
+- `repositories`: Package repositories to add (APT PPAs, Flatpak remotes) - schema only
+- `packages`: Software to install via package managers (APT implemented)
 - `files`: Configuration files to deploy
-- `dconf`: GNOME desktop settings
+- `dconf`: GNOME desktop settings (planned)
 - `includes`: Additional configuration files to merge
 
 ### Package Management
@@ -148,16 +148,14 @@ Configr features a powerful three-tier flag system that provides intelligent def
 ```yaml
 packages:
   apt:
-    - git                            # Uses intelligent defaults
+    - git                            # Uses intelligent defaults  
     - curl
     - build-essential
-  flatpak:
-    - org.mozilla.firefox
-    - com.visualstudio.code
-  snap:
-    - discord
-    - "code":                        # Some packages need special flags
-        flags: ["--classic"]
+  # Note: Flatpak and Snap management not yet implemented
+  # flatpak:
+  #   - org.mozilla.firefox
+  # snap: 
+  #   - discord
 ```
 
 **Advanced Flag Control:**
@@ -166,8 +164,8 @@ packages:
 # Optional: Override default flags globally
 package_defaults:
   apt: ["-y"]                        # Less opinionated than internal defaults
-  flatpak: ["--user"]                # Prefer user installs over system
-  snap: []                           # Use internal defaults (empty for snaps)
+  # flatpak: ["--user"]              # Will be used when flatpak is implemented
+  # snap: []                         # Will be used when snap is implemented
 
 packages:
   apt:
@@ -178,21 +176,22 @@ packages:
         flags: ["-y", "--force-depends"]
     - "/opt/downloads/package.deb"   # Absolute path .deb file
         
-  flatpak:
-    - org.mozilla.firefox            # Uses: ["--user"] from package_defaults
-    - "com.spotify.Client":          # Override to system install  
-        flags: ["--system"]
-        
-  snap:
-    - discord                        # Uses: [] (internal default)
-    - "slack":                       # Requires --classic for desktop integration
-        flags: ["--classic"]
+  # Flatpak and Snap management not yet implemented
+  # flatpak:
+  #   - org.mozilla.firefox            # Will use: ["--user"] from package_defaults
+  #   - "com.spotify.Client":          # Override to system install  
+  #       flags: ["--system"]
+  #       
+  # snap:
+  #   - discord                        # Will use: [] (internal default)
+  #   - "slack":                       # Requires --classic for desktop integration
+  #       flags: ["--classic"]
 ```
 
 **Internal Default Flags (no configuration needed):**
 - **APT**: `["-y", "--no-install-recommends"]` - Non-interactive, minimal installs
-- **Snap**: `[]` - No defaults, snaps are interactive by design
-- **Flatpak**: `["--system", "--assumeyes"]` - System-wide, non-interactive
+- **Snap**: `[]` - (Not implemented yet) No defaults, snaps are interactive by design
+- **Flatpak**: `["--system", "--assumeyes"]` - (Not implemented yet) System-wide, non-interactive
 
 **APT Package Management:**
 
@@ -227,9 +226,9 @@ packages:
 - **Path validation**: Prevents malicious .deb paths with security checks
 
 **Common Flag Examples:**
-- Snap packages often need `--classic` for filesystem access (`code`, `slack`, `postman`)
-- Flatpak allows `--user` vs `--system` installation choices
 - APT supports `--install-suggests`, `--allow-unauthenticated`, `--force-depends`, etc.
+- Snap packages will often need `--classic` for filesystem access (`code`, `slack`, `postman`) - when implemented
+- Flatpak will allow `--user` vs `--system` installation choices - when implemented
 
 ### Repository Management
 
@@ -318,7 +317,9 @@ files:
 
 ### Desktop Settings
 
-Configure GNOME settings via dconf:
+🚧 **Not Yet Implemented**: DConf settings management is planned but not implemented.
+
+When implemented, you'll be able to configure GNOME settings via dconf:
 
 ```yaml
 dconf:
