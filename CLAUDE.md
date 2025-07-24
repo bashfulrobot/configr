@@ -20,18 +20,19 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - Configuration validation with Rust-style error reporting
 - Three-tier package flag system
 - Professional CLI with charmbracelet/fang integration
+- Repository management schema (APT + Flatpak)
 - Comprehensive test coverage (94+ tests)
 
 **🚧 In Development:**
 
+- APT repository management implementation
+- Flatpak repository management implementation
 - Flatpak package management
 - Snap package management
 - DConf configuration management
 
 **📋 Planned Features:**
 
-- APT repository management
-- Flatpak repository management
 - Init command for tool installation
 - State caching and optimization
 - Package removal when removed from config
@@ -94,6 +95,9 @@ package_defaults:  # Optional: Override internal package manager defaults
   apt: ["-y"]
   flatpak: ["--user"]
   snap: ["--classic"]
+repositories:      # Repository management (apt, flatpak)
+  apt: [...]
+  flatpak: [...]
 packages:          # Package management (apt, flatpak, snap)
   apt: [...]
   flatpak: [...]
@@ -116,6 +120,25 @@ dconf:             # GNOME dconf settings
    - Flatpak: `["--system", "--assumeyes"]`
 2. **User Package Defaults (Tier 2)**: Global overrides in `package_defaults`
 3. **Per-Package Flags (Tier 3)**: Highest priority, package-specific overrides
+
+**Repository Management Schema:**
+
+```yaml
+repositories:
+  apt:
+    python39:                     # Repository name/identifier
+      ppa: "deadsnakes/ppa"       # Ubuntu PPA format: "user/repo"
+    docker:
+      uri: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+      key: "https://download.docker.com/linux/ubuntu/gpg"  # GPG key URL or key ID
+  flatpak:
+    flathub:                      # Remote name
+      url: "https://flathub.org/repo/flathub.flatpakrepo"  # Required: repository URL
+      user: false                 # Optional: user-only install (default: system)
+    kde:
+      url: "https://distribute.kde.org/kdeapps.flatpakrepo"
+      user: true
+```
 
 **File Management Schema:**
 

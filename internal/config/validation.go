@@ -65,6 +65,7 @@ func Validate(config *Config, configPath string) *ValidationResult {
 	if err != nil {
 		// If we can't parse with positions, fall back to basic validation
 		validateVersion(config, result, nil, configPath)
+		validateRepositories(config, result, nil, configPath)
 		validatePackages(config, result, nil, configPath)
 		validateFiles(config, configPath, result, nil, configPath)
 		validateDConf(config, result, nil, configPath)
@@ -73,6 +74,7 @@ func Validate(config *Config, configPath string) *ValidationResult {
 	
 	// Basic structure validation with position information
 	validateVersion(config, result, configWithPos, configPath)
+	validateRepositories(config, result, configWithPos, configPath)
 	validatePackages(config, result, configWithPos, configPath)
 	validateFiles(config, configPath, result, configWithPos, configPath)
 	validateDConf(config, result, configWithPos, configPath)
@@ -122,6 +124,141 @@ func validateVersion(config *Config, result *ValidationResult, configPos *Config
 			Help:       "use format like '1.0' or '1.0.0'",
 			Suggestion: "version: \"1.0\"",
 		})
+	}
+}
+
+// validateRepositories checks repository configurations
+func validateRepositories(config *Config, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
+	// Validate APT repositories
+	validateAptRepositories(config.Repositories.Apt, result, configPos, configPath)
+	
+	// Validate Flatpak repositories
+	validateFlatpakRepositories(config.Repositories.Flatpak, result, configPos, configPath)
+}
+
+// validateAptRepositories validates APT repository configurations
+func validateAptRepositories(repos []AptRepository, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
+	for _, repo := range repos {
+		fieldPrefix := fmt.Sprintf("repositories.apt.%s", repo.Name)
+		
+		// Validate that either PPA or URI is provided, but not both
+		hasPPA := repo.PPA != ""
+		hasURI := repo.URI != ""
+		
+		if !hasPPA && !hasURI {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "missing repository configuration",
+				Field:   fieldPrefix,
+				Message: "repository must specify either 'ppa' or 'uri'",
+				Help:    "add 'ppa: \"user/repo\"' for PPA or 'uri: \"deb [arch=amd64] https://...\"' for custom repository",
+				Note:    "PPA format: 'user/repo' (e.g., 'deadsnakes/ppa')",
+			})
+			continue
+		}
+		
+		if hasPPA && hasURI {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "conflicting repository configuration",
+				Field:   fieldPrefix,
+				Message: "repository cannot specify both 'ppa' and 'uri'",
+				Help:    "use 'ppa' for Ubuntu PPAs or 'uri' for custom repositories",
+				Note:    "choose one method based on your repository type",
+			})
+			continue
+		}
+		
+		// Validate PPA format
+		if hasPPA {
+			if !isValidPPAFormat(repo.PPA) {
+				result.Add(ValidationError{
+					Type:       "error",
+					Title:      "invalid PPA format",
+					Field:      fieldPrefix + ".ppa",
+					Value:      repo.PPA,
+					Message:    "PPA must be in 'user/repo' format",
+					Help:       "use format like 'deadsnakes/ppa' or 'ubuntu-toolchain-r/test'",
+					Suggestion: suggestPPAFormat(repo.PPA),
+				})
+			}
+		}
+		
+		// Validate URI format
+		if hasURI {
+			if !isValidAPTRepositoryURI(repo.URI) {
+				result.Add(ValidationError{
+					Type:    "error",
+					Title:   "invalid repository URI",
+					Field:   fieldPrefix + ".uri",
+					Value:   repo.URI,
+					Message: "repository URI format is invalid",
+					Help:    "use format: 'deb [arch=amd64] https://example.com/repo stable main'",
+					Note:    "URI should start with 'deb' or 'deb-src'",
+				})
+			}
+		}
+		
+		// Validate GPG key if provided
+		if repo.Key != "" {
+			if !isValidGPGKeyReference(repo.Key) {
+				result.Add(ValidationError{
+					Type:    "error",
+					Title:   "invalid GPG key reference",
+					Field:   fieldPrefix + ".key",
+					Value:   repo.Key,
+					Message: "GPG key must be a URL or keyserver key ID",
+					Help:    "use a HTTPS URL to .gpg file or keyserver key ID",
+					Note:    "example: 'https://example.com/key.gpg' or '0x1234567890ABCDEF'",
+				})
+			}
+		}
+	}
+}
+
+// validateFlatpakRepositories validates Flatpak repository configurations
+func validateFlatpakRepositories(repos []FlatpakRepository, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
+	for _, repo := range repos {
+		fieldPrefix := fmt.Sprintf("repositories.flatpak.%s", repo.Name)
+		
+		// Validate required URL field
+		if repo.URL == "" {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "missing repository URL",
+				Field:   fieldPrefix + ".url",
+				Message: "Flatpak repository URL is required",
+				Help:    "specify the .flatpakrepo URL or repository location",
+				Note:    "example: 'https://flathub.org/repo/flathub.flatpakrepo'",
+			})
+			continue
+		}
+		
+		// Validate URL format
+		if !isValidFlatpakRepositoryURL(repo.URL) {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "invalid repository URL",
+				Field:   fieldPrefix + ".url",
+				Value:   repo.URL,
+				Message: "Flatpak repository URL format is invalid",
+				Help:    "use HTTPS URL to .flatpakrepo file or repository",
+				Note:    "URLs should use HTTPS for security",
+			})
+		}
+		
+		// Validate repository name
+		if !isValidFlatpakRemoteName(repo.Name) {
+			result.Add(ValidationError{
+				Type:       "error",
+				Title:      "invalid remote name",
+				Field:      fieldPrefix,
+				Value:      repo.Name,
+				Message:    "Flatpak remote name contains invalid characters",
+				Help:       "use only letters, numbers, hyphens, and underscores",
+				Suggestion: suggestFlatpakRemoteName(repo.Name),
+			})
+		}
 	}
 }
 
@@ -601,4 +738,91 @@ func isValidDebFilePath(debPath string) bool {
 	}
 	
 	return true
+}
+
+// Repository validation helper functions
+
+// isValidPPAFormat validates PPA format (user/repo)
+func isValidPPAFormat(ppa string) bool {
+	// PPA format: user/repo
+	matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9\-]*\/[a-z0-9][a-z0-9\-]*$`, ppa)
+	return matched
+}
+
+// suggestPPAFormat suggests a corrected PPA format
+func suggestPPAFormat(ppa string) string {
+	// Remove common prefixes that users might add
+	ppa = strings.TrimPrefix(ppa, "ppa:")
+	ppa = strings.TrimSpace(ppa)
+	
+	// If it doesn't contain a slash, suggest adding one
+	if !strings.Contains(ppa, "/") {
+		return fmt.Sprintf("did you mean \"%s/ppa\"?", ppa)
+	}
+	
+	// Clean up the format
+	parts := strings.Split(ppa, "/")
+	if len(parts) == 2 {
+		user := strings.ToLower(regexp.MustCompile(`[^a-z0-9\-]`).ReplaceAllString(parts[0], "-"))
+		repo := strings.ToLower(regexp.MustCompile(`[^a-z0-9\-]`).ReplaceAllString(parts[1], "-"))
+		return fmt.Sprintf("did you mean \"%s/%s\"?", user, repo)
+	}
+	
+	return ""
+}
+
+// isValidAPTRepositoryURI validates APT repository URI format
+func isValidAPTRepositoryURI(uri string) bool {
+	// Must start with "deb" or "deb-src"
+	if !strings.HasPrefix(uri, "deb ") && !strings.HasPrefix(uri, "deb-src ") {
+		return false
+	}
+	
+	// Basic format check - should contain URL
+	return strings.Contains(uri, "http://") || strings.Contains(uri, "https://") || strings.Contains(uri, "file://")
+}
+
+// isValidGPGKeyReference validates GPG key URL or key ID
+func isValidGPGKeyReference(key string) bool {
+	// Check if it's a URL
+	if strings.HasPrefix(key, "https://") && (strings.HasSuffix(key, ".gpg") || strings.HasSuffix(key, ".asc")) {
+		return true
+	}
+	
+	// Check if it's a keyserver key ID (hex format, optionally prefixed with 0x)
+	keyID := strings.TrimPrefix(key, "0x")
+	matched, _ := regexp.MatchString(`^[A-Fa-f0-9]{8,40}$`, keyID)
+	return matched
+}
+
+// isValidFlatpakRepositoryURL validates Flatpak repository URL
+func isValidFlatpakRepositoryURL(url string) bool {
+	// Must be HTTPS for security (or HTTP for local testing)
+	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
+		return false
+	}
+	
+	// Should end with .flatpakrepo or be a valid repository URL
+	return strings.HasSuffix(url, ".flatpakrepo") || strings.Contains(url, "/repo/")
+}
+
+// isValidFlatpakRemoteName validates Flatpak remote name
+func isValidFlatpakRemoteName(name string) bool {
+	// Remote names: letters, numbers, hyphens, underscores
+	// Must start and end with alphanumeric character
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9][a-zA-Z0-9\-_]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$`, name)
+	return matched
+}
+
+// suggestFlatpakRemoteName suggests a corrected remote name
+func suggestFlatpakRemoteName(name string) string {
+	// Clean up the name
+	suggested := regexp.MustCompile(`[^a-zA-Z0-9\-_]`).ReplaceAllString(name, "-")
+	suggested = strings.Trim(suggested, "-_")
+	
+	if suggested != "" && suggested != name {
+		return fmt.Sprintf("did you mean \"%s\"?", suggested)
+	}
+	
+	return ""
 }
