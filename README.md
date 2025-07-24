@@ -84,6 +84,7 @@ files:
     group: "root"
     mode: "644"
     backup: true
+    copy: true      # Copy for system files
 
 dconf:
   settings:
@@ -188,17 +189,17 @@ packages:
 
 ### File Management
 
-Deploy any file to any location with optional permissions and backup:
+Deploy any file to any location with optional permissions and backup. Configr supports both symlink and copy modes:
 
 ```yaml
 files:
-  # Dotfile example
+  # Dotfile example (default symlink mode)
   bashrc:
     source: "dotfiles/bashrc"
     destination: "~/.bashrc"
     backup: true
 
-  # System file example  
+  # System file example with copy mode
   docker_daemon:
     source: "system/docker/daemon.json"
     destination: "/etc/docker/daemon.json"
@@ -206,7 +207,19 @@ files:
     group: "root"
     mode: "644"
     backup: true
+    copy: true    # Copy instead of symlink for system files
+
+  # Configuration that needs to be independent
+  app_config:
+    source: "configs/app.conf"
+    destination: "~/.config/app/config"
+    copy: true    # Ensures config won't change if source is modified
 ```
+
+**Symlink vs Copy Mode:**
+
+- **Symlink (default)**: Changes to source files are immediately reflected. Best for dotfiles where you want live updates.
+- **Copy mode**: Creates independent file copies. Best for system files or when you need stable configurations.
 
 **File Options:**
 - `source` (required): Path to source file
@@ -215,6 +228,7 @@ files:
 - `group` (optional): File group (preserves existing if omitted)  
 - `mode` (optional): File permissions (preserves existing if omitted)
 - `backup` (optional): Backup existing file before replacement
+- `copy` (optional): Copy file instead of creating symlink (default: false)
 
 ### Desktop Settings
 

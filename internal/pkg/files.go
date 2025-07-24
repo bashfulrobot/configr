@@ -80,9 +80,15 @@ func (fm *FileManager) deployFile(name string, file config.File) error {
 		return fmt.Errorf("failed to handle existing file: %w", err)
 	}
 
-	// Create symlink
-	if err := fm.createSymlink(sourcePath, destPath); err != nil {
-		return fmt.Errorf("failed to create symlink: %w", err)
+	// Deploy file (either copy or symlink)
+	if file.Copy {
+		if err := fm.copyFile(sourcePath, destPath); err != nil {
+			return fmt.Errorf("failed to copy file: %w", err)
+		}
+	} else {
+		if err := fm.createSymlink(sourcePath, destPath); err != nil {
+			return fmt.Errorf("failed to create symlink: %w", err)
+		}
 	}
 
 	// Set ownership and permissions if specified
@@ -168,7 +174,7 @@ func (fm *FileManager) handleExistingFile(destPath string, backup bool) error {
 		return nil
 	}
 
-	// Check if it's already a symlink to our source
+	// Check if it's already a symlink to our source (only relevant for symlink mode)
 	if link, err := os.Readlink(destPath); err == nil {
 		sourcePath, _ := fm.resolveSourcePath("")
 		sourceDir := filepath.Dir(sourcePath)
@@ -208,6 +214,43 @@ func (fm *FileManager) createSymlink(sourcePath, destPath string) error {
 	
 	if err := os.Symlink(sourcePath, destPath); err != nil {
 		return fmt.Errorf("failed to create symlink: %w", err)
+	}
+
+	return nil
+}
+
+// copyFile copies a file from source to destination
+func (fm *FileManager) copyFile(sourcePath, destPath string) error {
+	if fm.dryRun {
+		fm.logger.Debug("DRY RUN: Would copy file", "from", sourcePath, "to", destPath)
+		return nil
+	}
+
+	fm.logger.Debug("Copying file", "from", sourcePath, "to", destPath)
+
+	// Open source file
+	src, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer src.Close()
+
+	// Create destination file
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dst.Close()
+
+	// Copy file contents
+	_, err = dst.ReadFrom(src)
+	if err != nil {
+		return fmt.Errorf("failed to copy file contents: %w", err)
+	}
+
+	// Sync to ensure data is written
+	if err := dst.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
 	}
 
 	return nil
@@ -343,20 +386,26 @@ func (fm *FileManager) removeFile(name string, file config.File) error {
 		return nil
 	}
 
-	// Check if file exists and is a symlink
+	// Check if file exists 
 	if info, err := os.Lstat(destPath); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			fm.logger.Info("✗ Removing symlink", "name", name, "path", destPath)
 			if err := os.Remove(destPath); err != nil {
 				return fmt.Errorf("failed to remove symlink: %w", err)
 			}
-
-			// Try to restore backup if it exists
-			if err := fm.restoreBackup(destPath); err != nil {
-				fm.logger.Warn("Failed to restore backup", "path", destPath, "error", err)
+		} else if file.Copy {
+			// This was a copied file, safe to remove if it was managed by configr
+			fm.logger.Info("✗ Removing copied file", "name", name, "path", destPath)
+			if err := os.Remove(destPath); err != nil {
+				return fmt.Errorf("failed to remove copied file: %w", err)
 			}
 		} else {
-			fm.logger.Warn("File exists but is not a symlink, skipping removal", "path", destPath)
+			fm.logger.Warn("File exists but is not a symlink or copied file, skipping removal", "path", destPath)
+		}
+
+		// Try to restore backup if it exists (for both symlinks and copied files)
+		if err := fm.restoreBackup(destPath); err != nil {
+			fm.logger.Warn("Failed to restore backup", "path", destPath, "error", err)
 		}
 	}
 

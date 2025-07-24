@@ -41,8 +41,8 @@ These are meant to be implemented one by one when indicated to do so
 - [glow](https://github.com/charmbracelet/glow) can be used to render markdown if needed
 - [charmbracelet/fang: The CLI starter kit](https://github.com/charmbracelet/fang) to improve Cobra
 - [charmbracelet/log: A minimal, colourful Go logging library 🪵](https://github.com/charmbracelet/log)
-- https://github.com/charmbracelet/huh can be used to build terminal forms and prompts
-- https://github.com/charmbracelet/skate can be used if a key/value store is needed.
+- <https://github.com/charmbracelet/huh> can be used to build terminal forms and prompts
+- <https://github.com/charmbracelet/skate> can be used if a key/value store is needed.
 - Other libraries yet to be determined. Open to suggestions if there are real gains.
 
 ## Guardrails
@@ -52,6 +52,7 @@ These are meant to be implemented one by one when indicated to do so
 - Have proper stdout/stderr from the external tools
 - Anytime I ask for docs to be updated, update the readme from the enduser POV (docs), and the architecture section in Claude.md, as to what we are doing and why.
 - favour patterns and methods already implemented for consistency. However, if there is a more efficient way, please suggest it. If feasible, when changing the pattern, maintain consistency everywhere.
+- never put claude branding in any commit.
 
 ## Command patterns
 
@@ -64,14 +65,16 @@ These are meant to be implemented one by one when indicated to do so
 The YAML configuration schema has been designed with simplicity and consistency in mind:
 
 #### Top-level Structure
+
 ```yaml
 version: "1.0"     # Configuration schema version
-packages: {...}    # Package management (apt, flatpak, snap)  
+packages: {...}    # Package management (apt, flatpak, snap)
 files: {...}       # Unified file management
 dconf: {...}       # GNOME dconf settings
 ```
 
 #### Unified File Management
+
 Instead of separating "dotfiles" and "system files" into different sections, we use a single `files` section that treats all files uniformly. This design decision was made because:
 
 - **Simplicity**: A file is a file, regardless of destination (home directory vs /etc)
@@ -80,15 +83,17 @@ Instead of separating "dotfiles" and "system files" into different sections, we 
 - **Self-contained**: Each file entry includes its complete source path
 
 #### File Schema
+
 ```yaml
 files:
   filename:
     source: "path/to/source"      # Required: source file path
     destination: "/target/path"   # Required: where to place the file
     owner: "user"                 # Optional: file owner (if omitted, preserves existing)
-    group: "group"                # Optional: file group (if omitted, preserves existing)  
+    group: "group"                # Optional: file group (if omitted, preserves existing)
     mode: "644"                   # Optional: file permissions (if omitted, preserves existing)
     backup: true                  # Optional: backup existing file before replacing
+    copy: true                    # Optional: copy file instead of symlinking (default: false)
 ```
 
 Only `source` and `destination` are required. All other attributes are optional and preserve existing file attributes when omitted.
@@ -100,10 +105,11 @@ Configr implements a sophisticated three-tier flag system for package management
 **Three-Tier Flag Resolution Hierarchy:**
 
 1. **Internal Defaults** (Tier 1 - Built-in): Sensible defaults embedded in configr
-2. **User Package Defaults** (Tier 2 - Global): User-defined defaults in `package_defaults`  
+2. **User Package Defaults** (Tier 2 - Global): User-defined defaults in `package_defaults`
 3. **Per-Package Flags** (Tier 3 - Specific): Package-specific overrides with highest priority
 
 **Internal Default Flags:**
+
 ```yaml
 # Built into configr - no configuration needed
 apt: ["-y", "--no-install-recommends"]  # Non-interactive, minimal installs
@@ -145,6 +151,7 @@ packages:
 **Flag Resolution Examples:**
 
 Given the configuration above:
+
 - `git` uses: `["-y"]` (from package_defaults.apt)
 - `docker.io` uses: `["-y", "--install-suggests"]` (per-package override)
 - `discord` uses: `["--dangerous"]` (from package_defaults.snap)
@@ -155,6 +162,7 @@ Given the configuration above:
 **Backward Compatibility:**
 
 Existing simple configurations continue to work unchanged:
+
 ```yaml
 packages:
   apt: ["git", "curl"]           # Still valid - uses internal defaults
@@ -162,7 +170,9 @@ packages:
 ```
 
 #### DConf Settings
+
 Key-value pairs for GNOME configuration:
+
 ```yaml
 dconf:
   settings:
@@ -170,6 +180,7 @@ dconf:
 ```
 
 #### Include System
+
 Configuration files can be split into multiple files using an include system with flexible path resolution:
 
 ```yaml
@@ -178,7 +189,7 @@ version: "1.0"
 includes:
   - "packages.yaml"           # Explicit file
   - "packages/"               # Directory with default.yaml
-  - "packages/apt/"           # Subdirectory with default.yaml  
+  - "packages/apt/"           # Subdirectory with default.yaml
   - "dotfiles/vim.yaml"       # Explicit file in subdirectory
 
 packages:
@@ -186,8 +197,9 @@ packages:
 ```
 
 **Path Resolution Rules:**
+
 1. **Explicit file**: `packages.yaml` → loads `packages.yaml`
-2. **Directory with slash**: `packages/` → loads `packages/default.yaml`  
+2. **Directory with slash**: `packages/` → loads `packages/default.yaml`
 3. **Subdirectory with slash**: `packages/apt/` → loads `packages/apt/default.yaml`
 4. **Directory without slash**: `packages/apt` → loads `packages/apt/default.yaml` (backward compatibility)
 5. **Auto-extension**: `packages` → tries `packages.yaml` if no directory exists
@@ -195,11 +207,13 @@ packages:
 **Note**: For clarity, always use trailing slashes (`/`) when referencing directories.
 
 **Merging Strategy:**
+
 - **Package arrays**: Appended together with duplicates removed
 - **Files and dconf**: Later includes override earlier ones for same keys
 - **Circular includes**: Detected and prevented with clear error messages
 
 **Example Directory Structure:**
+
 ```
 configr.yaml
 packages.yaml
@@ -221,6 +235,7 @@ system/
 Configr provides comprehensive validation with Rust-style error reporting that is extremely clear and actionable:
 
 **Validation Features:**
+
 - **Schema validation**: Ensures all required fields are present and correctly formatted
 - **File existence checks**: Verifies source files exist before deployment
 - **Permission validation**: Checks file modes and ownership settings
@@ -229,6 +244,7 @@ Configr provides comprehensive validation with Rust-style error reporting that i
 - **DConf path validation**: Validates GNOME configuration paths
 
 **Error Reporting Style:**
+
 ```
 error: source file not found
   --> configr.yaml:15:5
@@ -242,6 +258,7 @@ error: source file not found
 ```
 
 **Quick Fix Suggestions:**
+
 - Provides immediate actionable solutions
 - Shows exactly what to change and where
 - Suggests common alternatives for missing files
@@ -252,21 +269,25 @@ error: source file not found
 Configr follows Cobra best practices with a well-structured command interface:
 
 **Command Structure:**
+
 ```bash
 configr [global-flags] <command> [command-flags] [arguments]
 ```
 
 **Available Commands:**
+
 - `configr validate [file]` - Validate configuration without applying changes
 - `configr version` - Show version and build information
 - `configr help` - Show help for any command
 
 **Global Flags:**
+
 - `-c, --config <file>` - Specify config file path
-- `-v, --verbose` - Enable verbose output  
+- `-v, --verbose` - Enable verbose output
 - `--no-color` - Disable colored output
 
 **Config File Discovery:**
+
 1. Explicit path via `--config` flag
 2. Environment variable `CONFIGR_CONFIG`
 3. Current directory (`./configr.yaml`)
@@ -276,6 +297,7 @@ configr [global-flags] <command> [command-flags] [arguments]
 7. Local system config (`/usr/local/etc/configr/configr.yaml`)
 
 **Enhanced User Experience:**
+
 - Structured logging with charmbracelet/log
 - Clear success/warning/error indicators (✓, ⚠, ✗)
 - Position-aware error reporting with line/column numbers
@@ -286,6 +308,7 @@ configr [global-flags] <command> [command-flags] [arguments]
 Configr uses charmbracelet/fang for enhanced CLI presentation and functionality:
 
 **Fang Benefits:**
+
 - **Styled help pages**: Professional, visually appealing help output with consistent formatting
 - **Automatic version handling**: Built-in version command with proper styling
 - **Man page generation**: Automatic Unix man page creation via `configr man`
@@ -293,6 +316,7 @@ Configr uses charmbracelet/fang for enhanced CLI presentation and functionality:
 - **Minimal boilerplate**: Cleaner command definitions with less setup code
 
 **Implementation:**
+
 ```go
 // main.go - Simple fang integration
 func main() {
@@ -304,6 +328,7 @@ func main() {
 ```
 
 **Auto-generated Commands:**
+
 - `configr man` - Generate Unix man pages
 - `configr completion [shell]` - Generate shell completions
 - `configr --version` - Styled version information
@@ -311,6 +336,7 @@ func main() {
 This integration significantly improves the professional appearance and usability of the CLI while reducing maintenance overhead.
 
 **Key Improvements:**
+
 - **Help system**: Professional formatting with clear sections (USAGE, EXAMPLES, COMMANDS, FLAGS)
 - **Consistency**: All help pages follow the same visual structure
 - **Automatic features**: Version, man pages, and completions generated without additional code
@@ -370,31 +396,43 @@ The file management system has been fully implemented with a comprehensive, prod
 
 **Key Implementation Details:**
 
-**Symlink Strategy**: Files are deployed as symlinks rather than copies, providing several advantages:
+**Deployment Strategies**: Files can be deployed using two strategies based on the `copy` flag:
+
+**Symlink Mode (default, `copy: false`)**: Creates symlinks from source to destination, providing:
 - **Live updates**: Changes to source files are immediately reflected
 - **Clear ownership**: Easy to identify configr-managed files
 - **Safe removal**: When removing files, symlinks can be safely deleted
 - **Backup restoration**: Original files can be restored when symlinks are removed
 
+**Copy Mode (`copy: true`)**: Creates independent copies of files, providing:
+- **Static snapshots**: Files remain unchanged even if source files are modified
+- **Independence**: No dependency on source file location or availability
+- **Standard files**: Regular files that work with all applications
+- **Performance**: No symlink resolution overhead for frequently accessed files
+
 **Path Resolution Hierarchy**:
+
 1. **Absolute paths**: Used as-is (`/etc/hosts`)
 2. **Home expansion**: `~/` becomes user's home directory
 3. **User expansion**: `~username/` becomes specified user's home
 4. **Relative paths**: Resolved relative to configuration file directory
 
 **Backup System**:
+
 - **Timestamped backups**: Format `filename.backup.YYYYMMDD-HHMMSS`
 - **Automatic restore**: When removing files, most recent backup is restored
 - **Optional behavior**: Controlled by `backup: true/false` in configuration
 - **Conflict handling**: Warns about existing files, allows user choice
 
 **Permission Management**:
+
 - **Selective application**: Only sets owner/group/mode when explicitly specified
 - **Preservation**: Omitted attributes preserve existing file attributes
 - **Root detection**: Warns when ownership changes require root privileges
 - **Security awareness**: Validates and warns about overly permissive modes
 
 **Error Handling and UX**:
+
 - **Comprehensive validation** before any system changes
 - **Dry-run mode** for safe preview of all operations
 - **Clear progress indicators** with emoji and colored output
@@ -403,6 +441,7 @@ The file management system has been fully implemented with a comprehensive, prod
 
 **Testing Coverage**:
 The implementation includes comprehensive tests covering:
+
 - Path resolution (source and destination)
 - Dry-run vs real deployment behavior
 - Backup creation and restoration

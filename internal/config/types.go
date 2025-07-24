@@ -35,6 +35,7 @@ type File struct {
 	Group       string `yaml:"group,omitempty" mapstructure:"group,omitempty"`
 	Mode        string `yaml:"mode,omitempty" mapstructure:"mode,omitempty"`
 	Backup      bool   `yaml:"backup,omitempty" mapstructure:"backup,omitempty"`
+	Copy        bool   `yaml:"copy,omitempty" mapstructure:"copy,omitempty"`
 }
 
 // DConfConfig manages dconf settings

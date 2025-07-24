@@ -368,3 +368,193 @@ func TestFileManager_setFileAttributes_DryRun(t *testing.T) {
 		t.Error("file permissions should not have changed in dry-run mode")
 	}
 }
+
+func TestFileManager_DeployFiles_CopyMode(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Create a logger for testing
+	logger := log.New(os.Stderr)
+	logger.SetLevel(log.ErrorLevel) // Suppress output during tests
+
+	fm := NewFileManager(logger, false, tempDir) // real deployment
+
+	// Create a test source file
+	sourceFile := filepath.Join(tempDir, "source.txt")
+	testContent := []byte("test content for copy")
+	err := os.WriteFile(sourceFile, testContent, 0644)
+	if err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+
+	// Create test configuration with copy mode
+	destFile := filepath.Join(tempDir, "dest.txt")
+	files := map[string]config.File{
+		"test-file": {
+			Source:      "source.txt",
+			Destination: destFile,
+			Mode:        "644",
+			Copy:        true, // Use copy mode instead of symlink
+		},
+	}
+
+	// Deploy files
+	err = fm.DeployFiles(files)
+	if err != nil {
+		t.Fatalf("unexpected error during deployment: %v", err)
+	}
+
+	// Verify file was created
+	if _, err := os.Stat(destFile); err != nil {
+		t.Fatalf("destination file was not created: %v", err)
+	}
+
+	// Verify it's NOT a symlink (should be a regular file)
+	info, err := os.Lstat(destFile)
+	if err != nil {
+		t.Fatalf("failed to stat destination file: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Error("destination file should not be a symlink in copy mode")
+	}
+
+	// Verify content was copied correctly
+	copiedContent, err := os.ReadFile(destFile)
+	if err != nil {
+		t.Fatalf("failed to read copied file: %v", err)
+	}
+	if string(copiedContent) != string(testContent) {
+		t.Errorf("copied content mismatch: got %s, expected %s", string(copiedContent), string(testContent))
+	}
+}
+
+func TestFileManager_DeployFiles_CopyMode_DryRun(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Create a logger for testing
+	logger := log.New(os.Stderr)
+	logger.SetLevel(log.ErrorLevel) // Suppress output during tests
+
+	fm := NewFileManager(logger, true, tempDir) // dry-run mode
+
+	// Create a test source file
+	sourceFile := filepath.Join(tempDir, "source.txt")
+	err := os.WriteFile(sourceFile, []byte("test content"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+
+	// Create test configuration with copy mode
+	files := map[string]config.File{
+		"test-file": {
+			Source:      "source.txt",
+			Destination: filepath.Join(tempDir, "dest.txt"),
+			Copy:        true,
+		},
+	}
+
+	// Deploy files in dry-run mode
+	err = fm.DeployFiles(files)
+	if err != nil {
+		t.Fatalf("unexpected error in dry-run: %v", err)
+	}
+
+	// Verify no actual file was created
+	destFile := filepath.Join(tempDir, "dest.txt")
+	if _, err := os.Stat(destFile); err == nil {
+		t.Error("destination file should not exist in dry-run mode")
+	}
+}
+
+func TestFileManager_CopyMode_vs_SymlinkMode(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Create a logger for testing
+	logger := log.New(os.Stderr)
+	logger.SetLevel(log.ErrorLevel) // Suppress output during tests
+
+	fm := NewFileManager(logger, false, tempDir)
+
+	// Create a test source file
+	sourceFile := filepath.Join(tempDir, "source.txt")
+	testContent := []byte("original content")
+	err := os.WriteFile(sourceFile, testContent, 0644)
+	if err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+
+	// Test symlink mode
+	symlinkDest := filepath.Join(tempDir, "symlink_dest.txt")
+	symlinkFiles := map[string]config.File{
+		"symlink-file": {
+			Source:      "source.txt",
+			Destination: symlinkDest,
+			Copy:        false, // Explicit symlink mode
+		},
+	}
+
+	err = fm.DeployFiles(symlinkFiles)
+	if err != nil {
+		t.Fatalf("failed to deploy symlink file: %v", err)
+	}
+
+	// Test copy mode
+	copyDest := filepath.Join(tempDir, "copy_dest.txt")
+	copyFiles := map[string]config.File{
+		"copy-file": {
+			Source:      "source.txt",
+			Destination: copyDest,
+			Copy:        true, // Explicit copy mode
+		},
+	}
+
+	err = fm.DeployFiles(copyFiles)
+	if err != nil {
+		t.Fatalf("failed to deploy copy file: %v", err)
+	}
+
+	// Verify symlink is a symlink
+	symlinkInfo, err := os.Lstat(symlinkDest)
+	if err != nil {
+		t.Fatalf("failed to stat symlink file: %v", err)
+	}
+	if symlinkInfo.Mode()&os.ModeSymlink == 0 {
+		t.Error("symlink file should be a symlink")
+	}
+
+	// Verify copy is NOT a symlink
+	copyInfo, err := os.Lstat(copyDest)
+	if err != nil {
+		t.Fatalf("failed to stat copy file: %v", err)
+	}
+	if copyInfo.Mode()&os.ModeSymlink != 0 {
+		t.Error("copy file should not be a symlink")
+	}
+
+	// Modify source file
+	modifiedContent := []byte("modified content")
+	err = os.WriteFile(sourceFile, modifiedContent, 0644)
+	if err != nil {
+		t.Fatalf("failed to modify source file: %v", err)
+	}
+
+	// Read symlink file (should reflect changes immediately)
+	symlinkContent, err := os.ReadFile(symlinkDest)
+	if err != nil {
+		t.Fatalf("failed to read symlink file: %v", err)
+	}
+	if string(symlinkContent) != string(modifiedContent) {
+		t.Error("symlink should reflect source file changes immediately")
+	}
+
+	// Read copy file (should still have original content)
+	copyContent, err := os.ReadFile(copyDest)
+	if err != nil {
+		t.Fatalf("failed to read copy file: %v", err)
+	}
+	if string(copyContent) != string(testContent) {
+		t.Error("copy should retain original content after source modification")
+	}
+}
