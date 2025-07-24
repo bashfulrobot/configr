@@ -18,16 +18,16 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - APT package management (repository + local .deb files)
 - Repository management (APT PPAs/custom repos + Flatpak remotes)
 - File management system (symlink/copy modes with backup)
+- DConf configuration management (desktop settings for any dconf-using application)
 - Configuration validation with Rust-style error reporting
 - Three-tier package flag system
 - Professional CLI with charmbracelet/fang integration
-- Comprehensive test coverage (100+ tests)
+- Comprehensive test coverage (130+ tests)
 
 **🚧 In Development:**
 
 - Flatpak package management
 - Snap package management
-- DConf configuration management
 
 **📋 Planned Features:**
 
@@ -105,7 +105,7 @@ files:             # Unified file management
     source: "path"
     destination: "path"
     # Optional: owner, group, mode, backup, copy
-dconf:             # GNOME dconf settings
+dconf:             # DConf settings for any dconf-using application
   settings:
     "/path/to/setting": "'value'"
 ```
@@ -195,7 +195,7 @@ configr [global-flags] <command> [command-flags] [arguments]
 - Permission validation (file modes and ownership)
 - Path safety (prevents unsafe destinations like `../../../etc/passwd`)
 - Package name validation (manager-specific rules)
-- DConf path validation (GNOME settings paths)
+- DConf path validation (dconf settings paths and value formats)
 
 **Error Reporting Style (Rust-inspired):**
 
@@ -363,6 +363,44 @@ return config.GetDefaultFlags("apt")
 - Remote name validation (alphanumeric with hyphens/underscores)
 - User vs system installation control
 - `--if-not-exists` flag to prevent duplicate remotes
+
+#### DConf Configuration Management
+
+**Core Components:**
+
+- **DConfManager (`internal/pkg/dconf.go`)** - Central orchestrator for dconf settings management
+- **Universal compatibility**: Works with any application using dconf (GNOME, GTK apps, etc.)
+- **Comprehensive validation**: Path format, value type, and structure validation
+- **Multiple operations**: Set, get, reset, list, and dump dconf settings
+- **Type safety**: Supports strings, booleans, numbers, and complex data structures
+
+**Key Implementation Details:**
+
+- **Setting Management**: Uses `dconf write` for applying configuration changes
+- **Value Validation**: Comprehensive checks for proper quoting and data types
+- **Path Validation**: Ensures dconf paths start with `/` and have proper structure
+- **Dry-run Support**: Preview changes without modifying system settings
+- **Error Handling**: Clear feedback with specific dconf command requirements
+
+**DConf Features:**
+- Settings path validation (must start with `/`, no double slashes)
+- Value format validation with helpful warnings for unquoted strings
+- Support for all dconf data types (strings, booleans, integers, arrays)
+- Immediate application without application restart required
+- Integration with existing configuration validation system
+
+**Advanced Operations:**
+- `GetSetting()`: Retrieve current values from dconf database
+- `ResetSetting()`: Reset settings to application defaults
+- `ListSettings()`: List all settings under a given path
+- `DumpSettings()`: Export settings in ini-like format for backup
+- `ValidateSettings()`: Pre-validate settings before application
+
+**Application Coverage:**
+- GNOME Desktop Environment (themes, wallpapers, behavior)
+- GNOME Applications (Terminal, Nautilus, Text Editor, etc.)
+- GTK Applications (any app using GSettings/dconf)
+- Third-party applications (Guake, etc.)
 
 ### 🚧 In Development Features
 

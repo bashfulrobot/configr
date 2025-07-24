@@ -25,9 +25,10 @@ This command will:
 - Add APT and Flatpak repositories
 - Deploy and symlink files to their destinations
 - Install APT packages
+- Apply dconf settings for desktop configuration
 - Create backups of existing files when requested
 
-Note: Flatpak packages, Snap, and DConf are not yet implemented.
+Note: Flatpak packages and Snap packages are not yet implemented.
 
 By default, it looks for 'configr.yaml' in standard locations.`,
 	Example: `  configr apply                       # Apply default config
@@ -133,9 +134,19 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to apply package configurations: %w", err)
 	}
 
-	// TODO: Apply dconf configurations (when dconf management is implemented)  
+	// Apply dconf configurations
 	if len(cfg.DConf.Settings) > 0 {
-		logger.Warn("DConf management not yet implemented - skipping dconf settings")
+		logger.Debug("Applying dconf configurations", "count", len(cfg.DConf.Settings))
+		dconfManager := pkg.NewDConfManager(logger, dryRun)
+		
+		// Validate dconf settings before applying
+		if err := dconfManager.ValidateSettings(cfg.DConf); err != nil {
+			return fmt.Errorf("dconf validation failed: %w", err)
+		}
+		
+		if err := dconfManager.ApplySettings(cfg.DConf); err != nil {
+			return fmt.Errorf("failed to apply dconf settings: %w", err)
+		}
 	}
 
 	if dryRun {

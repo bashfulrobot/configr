@@ -2,8 +2,8 @@
 
 A single binary configuration management tool for Ubuntu desktop systems. Configr provides package management, configuration file management, and desktop settings management similar to Ansible but contained in a single binary.
 
-✅ **Currently Implemented**: APT package management, Repository management, File management, Configuration validation  
-🚧 **In Development**: Flatpak and Snap package management, DConf settings
+✅ **Currently Implemented**: APT package management, Repository management, File management, DConf settings, Configuration validation  
+🚧 **In Development**: Flatpak and Snap package management
 
 **Key Differentiators:**
 - **Professional CLI**: Styled help pages and documentation via charmbracelet/fang
@@ -14,7 +14,7 @@ A single binary configuration management tool for Ubuntu desktop systems. Config
 
 - **Smart Package Management**: Three-tier flag system with intelligent defaults for APT (Flatpak and Snap planned)
 - **File Management**: Deploy and manage configuration files (dotfiles, system files) with symlinks
-- **Desktop Configuration**: GNOME dconf settings management (planned)
+- **Desktop Configuration**: DConf settings management for any application using dconf
 - **Modular Configuration**: Split configurations across multiple YAML files with includes
 - **Backup Support**: Automatic backup of existing files before replacement
 - **Professional CLI**: Styled help pages, auto-completion, and man page generation
@@ -93,11 +93,11 @@ files:
     backup: true
     copy: true      # Copy for system files
 
-# DConf settings management not yet implemented
-# dconf:
-#   settings:
-#     "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
-#     "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
+    "/org/gnome/desktop/wm/preferences/button-layout": "'close,minimize,maximize:'"
 ```
 
 2. **Validate your configuration**:
@@ -131,7 +131,7 @@ Configr uses YAML configuration files with five main sections:
 - `repositories`: Package repositories to add (APT PPAs, Flatpak remotes)
 - `packages`: Software to install via package managers (APT implemented)
 - `files`: Configuration files to deploy
-- `dconf`: GNOME desktop settings (planned)
+- `dconf`: Desktop settings for any application using dconf
 - `includes`: Additional configuration files to merge
 
 ### Package Management
@@ -315,17 +315,39 @@ files:
 
 ### Desktop Settings
 
-🚧 **Not Yet Implemented**: DConf settings management is planned but not implemented.
-
-When implemented, you'll be able to configure GNOME settings via dconf:
+Configure any application that uses dconf for settings storage. This includes GNOME desktop environment, many GTK applications, and other desktop applications:
 
 ```yaml
 dconf:
   settings:
+    # GNOME Desktop Environment
     "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
     "/org/gnome/desktop/wm/preferences/button-layout": "'close,minimize,maximize:'"
-    "/org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9/background-color": "'rgb(23,20,33)'"
+    "/org/gnome/desktop/interface/clock-show-seconds": "true"
+    
+    # GNOME Terminal
+    "/org/gnome/terminal/legacy/profiles:/:default/background-color": "'rgb(23,20,33)'"
+    "/org/gnome/terminal/legacy/profiles:/:default/foreground-color": "'rgb(208,207,204)'"
+    
+    # Nautilus File Manager
+    "/org/gnome/nautilus/preferences/default-folder-viewer": "'icon-view'"
+    "/org/gnome/nautilus/preferences/show-hidden-files": "true"
+    
+    # Text Editor (gedit)
+    "/org/gnome/gedit/preferences/editor/scheme": "'oblivion'"
+    
+    # Application-specific (e.g., Guake terminal)
+    "/apps/guake/general/window-height": "40"
+    "/apps/guake/general/use-default-font": "false"
 ```
+
+**DConf Features:**
+- **Universal compatibility**: Works with any application using dconf
+- **Immediate application**: Settings applied instantly without restart
+- **Type safety**: Supports strings, booleans, numbers, and arrays
+- **Validation**: Comprehensive path and value validation
+- **Dry-run support**: Preview changes before applying
 
 ### Modular Configuration
 
@@ -363,7 +385,7 @@ Configr provides comprehensive validation with Rust-inspired error reporting for
 - **Permission validation** - Checks file modes and ownership
 - **Path safety** - Prevents unsafe destinations like `../../../etc/passwd`
 - **Package validation** - Ensures valid package names
-- **DConf validation** - Validates GNOME settings paths
+- **DConf validation** - Validates dconf paths and value formats
 
 ### Error Reporting
 
