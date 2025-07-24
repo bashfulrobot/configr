@@ -3,15 +3,18 @@
 ## Project Overview
 
 ### Summary & Purpose
+
 Written by the staff member "Gopher", this application will be a scaled-down version of desktop Linux (Ubuntu) configuration management, akin to Ansible, but in a single binary.
 
 **Application Identity:**
+
 - configr
 - github.com/bashfulrobot/configr
 
 ### Current Implementation Status
 
 **✅ Implemented (Production Ready):**
+
 - APT package management (repository + local .deb files)
 - File management system (symlink/copy modes with backup)
 - Configuration validation with Rust-style error reporting
@@ -20,11 +23,13 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - Comprehensive test coverage (94+ tests)
 
 **🚧 In Development:**
+
 - Flatpak package management
 - Snap package management
 - DConf configuration management
 
 **📋 Planned Features:**
+
 - APT repository management
 - Flatpak repository management
 - Init command for tool installation
@@ -33,6 +38,7 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - Backup restoration system
 
 ### Key Technical Differentiators
+
 - **Professional CLI**: Styled help pages, man pages, shell completions
 - **Rust-style Validation**: Clear, actionable error messages with suggestions
 - **Three-tier Flag System**: Internal defaults → User defaults → Per-package overrides
@@ -44,25 +50,30 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 ## Development Guidelines
 
 ### Core Principles
+
 - **Single Feature Implementation**: Implement features one at a time unless dependencies require otherwise
 - **Exceptional User Experience**: Color output, emoji icons, spinners, simple-to-read output (not verbose unless requested)
 - **Rust-style Error Reporting**: Extremely easy to decipher and act on error messages
 - **System Admin Friendly**: Professional CLI suitable for production system administration
 
 ### Guardrails & Rules
+
 - **Never put Claude branding in any commit**
+- **Commits should use conventional commits, with emojis, and if there is ever a version tag, follow semver.
 - **Always write tests when feasible** and run as appropriate
 - **Proper error handling** with meaningful stdout/stderr from external tools
 - **Favor existing patterns** for consistency, suggest improvements when beneficial
 - **Update documentation** when requested: README (end-user POV) + CLAUDE.md (architecture)
 
 ### Development Workflow
+
 - **Follow Cobra best practices** for CLI verbs and structure
 - **Shell out to system tools** (apt, flatpak, snap, dconf)
 - **Check tool availability** on init with installation offers
 - **Maintain consistency** across all implementations
 
 ### Testing Requirements
+
 - Comprehensive test coverage for all new features
 - Integration tests using actual system commands
 - Validation tests for configuration schemas
@@ -75,6 +86,7 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 ### Configuration Schema (YAML Structure)
 
 **Top-level Structure:**
+
 ```yaml
 version: "1.0"     # Configuration schema version
 includes: [...]    # Optional: Include additional YAML files
@@ -84,7 +96,7 @@ package_defaults:  # Optional: Override internal package manager defaults
   snap: ["--classic"]
 packages:          # Package management (apt, flatpak, snap)
   apt: [...]
-  flatpak: [...]  
+  flatpak: [...]
   snap: [...]
 files:             # Unified file management
   name:
@@ -97,14 +109,16 @@ dconf:             # GNOME dconf settings
 ```
 
 **Three-Tier Package Flag System:**
+
 1. **Internal Defaults (Tier 1)**: Built into configr
-   - APT: `["-y", "--no-install-recommends"]` 
+   - APT: `["-y", "--no-install-recommends"]`
    - Snap: `[]` (interactive by design)
    - Flatpak: `["--system", "--assumeyes"]`
 2. **User Package Defaults (Tier 2)**: Global overrides in `package_defaults`
 3. **Per-Package Flags (Tier 3)**: Highest priority, package-specific overrides
 
 **File Management Schema:**
+
 ```yaml
 files:
   filename:
@@ -120,11 +134,13 @@ files:
 ### Command Interface (CLI Design)
 
 **Command Structure:**
+
 ```bash
 configr [global-flags] <command> [command-flags] [arguments]
 ```
 
 **Available Commands:**
+
 - `configr validate [file]` - Validate configuration without applying changes
 - `configr apply [file]` - Apply configuration changes to system
 - `configr apply --dry-run` - Preview changes without applying
@@ -134,11 +150,13 @@ configr [global-flags] <command> [command-flags] [arguments]
 - `configr --version` - Show version and build information
 
 **Global Flags:**
+
 - `-c, --config <file>` - Specify config file path
-- `-v, --verbose` - Enable verbose output  
+- `-v, --verbose` - Enable verbose output
 - `--no-color` - Disable colored output
 
 **Config File Discovery (in order):**
+
 1. Explicit path via `--config` flag
 2. Environment variable `CONFIGR_CONFIG`
 3. Current directory (`./configr.yaml`)
@@ -150,6 +168,7 @@ configr [global-flags] <command> [command-flags] [arguments]
 ### Error Handling & UX Standards
 
 **Validation Features:**
+
 - Schema validation (required fields, correct formats)
 - File existence checks (source files exist before deployment)
 - Permission validation (file modes and ownership)
@@ -158,6 +177,7 @@ configr [global-flags] <command> [command-flags] [arguments]
 - DConf path validation (GNOME settings paths)
 
 **Error Reporting Style (Rust-inspired):**
+
 ```
 error: source file not found
   --> configr.yaml:15:5
@@ -171,6 +191,7 @@ error: source file not found
 ```
 
 **User Experience Standards:**
+
 - Structured logging with charmbracelet/log
 - Clear success/warning/error indicators (✓, ⚠, ✗)
 - Position-aware error reporting with line/column numbers
@@ -180,12 +201,14 @@ error: source file not found
 ### External Dependencies
 
 **Required Libraries:**
+
 - **Viper**: Configuration file management
 - **Cobra**: CLI interface framework
 - **charmbracelet/fang**: Enhanced CLI presentation and tooling
 - **charmbracelet/log**: Structured, colorful logging
 
 **Optional Libraries (for consideration):**
+
 - [glow](https://github.com/charmbracelet/glow) - Markdown rendering
 - [charmbracelet/huh](https://github.com/charmbracelet/huh) - Terminal forms and prompts
 - [charmbracelet/skate](https://github.com/charmbracelet/skate) - Key/value store if needed
@@ -197,7 +220,9 @@ error: source file not found
 ### ✅ Implemented Features
 
 #### File Management System
+
 **Core Components:**
+
 - **FileManager (`internal/pkg/files.go`)** - Central orchestrator for all file operations
 - **Dual deployment modes**: Symlink (default) and copy modes
 - **Backup system**: Timestamped backups of existing files before replacement
@@ -206,13 +231,16 @@ error: source file not found
 - **Safety checks**: Permission validation and path safety verification
 
 **Key Implementation Details:**
+
 - **Symlink Mode (default)**: Live updates, clear ownership, safe removal, backup restoration
 - **Copy Mode**: Static snapshots, independence, standard files, no symlink overhead
 - **Path Resolution Hierarchy**: Absolute paths → Relative to config dir → User home expansion
 - **Comprehensive validation**: Source file existence, destination safety, permission checks
 
 #### APT Package Management
+
 **Core Components:**
+
 - **AptManager (`internal/pkg/apt.go`)** - Central orchestrator for all APT operations
 - **Repository packages**: Standard Ubuntu/Debian package installation
 - **Local .deb files**: Installation from local filesystem paths with security validation
@@ -220,6 +248,7 @@ error: source file not found
 - **State management**: Checks existing package status to avoid unnecessary operations
 
 **Three-Tier Flag Resolution Implementation:**
+
 ```go
 // Tier 3: Per-package flags (highest priority)
 if pkg.Flags != nil {
@@ -234,12 +263,14 @@ return config.GetDefaultFlags("apt")
 ```
 
 **Local .deb File Support:**
+
 - Path validation with security checks (prevents `../../../etc/passwd.deb`)
 - Relative path resolution to absolute paths
 - Mixed installations (repository + local packages seamlessly)
 - File existence verification before installation
 
 **Installation Logic:**
+
 1. Check apt command availability
 2. Group packages by resolved flags
 3. Separate local .deb files from repository packages
@@ -248,7 +279,9 @@ return config.GetDefaultFlags("apt")
 6. Provide clear success/failure feedback
 
 #### Configuration Validation System
+
 **Validation Integration:**
+
 - APT-specific validation extends existing framework
 - Package name validation (repository packages follow apt naming conventions)
 - .deb file validation (local files must have valid paths with security checks)
@@ -256,13 +289,16 @@ return config.GetDefaultFlags("apt")
 - Availability checking (verifies apt command exists on system)
 
 **Advanced Features:**
+
 - Rust-style error reporting with actionable suggestions
 - Quick fix recommendations with specific file paths
 - Circular include detection for configuration files
 - Position-aware error reporting with line/column numbers
 
 #### Professional CLI Integration
+
 **Fang Integration Benefits:**
+
 - **Styled help pages**: Professional, visually appealing help output
 - **Automatic version handling**: Built-in version command with styling
 - **Man page generation**: Automatic Unix man page creation
@@ -270,17 +306,20 @@ return config.GetDefaultFlags("apt")
 - **Minimal boilerplate**: Reduced CLI code by ~60% while adding features
 
 **Enhanced User Experience:**
+
 - Professional formatting with clear sections (USAGE, EXAMPLES, COMMANDS, FLAGS)
 - Consistent visual structure across all help pages
 - Clean, readable output suitable for system administration
 - Automatic features without additional maintenance code
 
 ### 🚧 In Development Features
+
 *Reserved for future implementation status updates*
 
 ### 📋 Planned Features
 
 #### Advanced Package Management
+
 - **APT repository management**: Add/remove repositories
 - **Flatpak repository management**: Remote repository configuration
 - **Package removal**: Remove packages when removed from configuration
@@ -288,16 +327,19 @@ return config.GetDefaultFlags("apt")
 - **Installation optimization**: Cache system to speed up repeated runs
 
 #### Enhanced File Management
+
 - **Backup restoration**: Restore backed-up files when configurations are removed
 - **Interactive conflict resolution**: Yes/no prompts for file conflicts
 - **Advanced permission handling**: More sophisticated ownership management
 
 #### System Integration
+
 - **Init command**: Ensure required tools (apt, flatpak, snapd) are installed
 - **Tool availability checking**: Verify and offer to install missing dependencies
 - **System state management**: Track what configr manages vs. external changes
 
 #### Configuration System Enhancements
+
 - **Include system expansion**: More sophisticated file inclusion patterns
 - **Configuration splitting**: Advanced strategies for modular configurations
 - **Validation improvements**: More comprehensive safety and compatibility checks
@@ -307,6 +349,7 @@ return config.GetDefaultFlags("apt")
 ## Implementation Details (Reference)
 
 ### Code Organization
+
 ```
 configr/
 ├── cmd/configr/           # CLI command implementations
@@ -327,6 +370,7 @@ configr/
 ```
 
 ### Design Patterns Used
+
 - **Manager Pattern**: FileManager, AptManager for feature encapsulation
 - **Three-Tier Resolution**: Hierarchical flag resolution system
 - **Validation Pipeline**: Comprehensive validation with actionable error reporting
@@ -334,19 +378,23 @@ configr/
 - **Strategy Pattern**: Symlink vs. copy deployment strategies
 
 ### Integration Points
+
 - **Viper Integration**: Configuration loading with multiple file format support
 - **Cobra Integration**: CLI command structure with professional help pages
 - **System Command Integration**: Shelling out to apt, dpkg with proper error handling
 - **Validation Integration**: Unified validation system across all configuration types
 
 ### Testing Strategies
+
 - **Unit Tests**: Individual component testing (AptManager, FileManager, validation)
 - **Integration Tests**: End-to-end testing with actual binary execution
 - **Validation Tests**: Comprehensive schema and error condition testing
 - **Cross-platform Considerations**: Path handling and command availability testing
 
 ### Include System Implementation
+
 **Path Resolution Rules:**
+
 1. **Explicit file**: `packages.yaml` → loads `packages.yaml`
 2. **Directory with slash**: `packages/` → loads `packages/default.yaml`
 3. **Subdirectory with slash**: `packages/apt/` → loads `packages/apt/default.yaml`
@@ -354,11 +402,13 @@ configr/
 5. **Auto-extension**: `packages` → tries `packages.yaml` if no directory exists
 
 **Merging Strategy:**
+
 - **Package arrays**: Appended together with duplicates removed
 - **Files and dconf**: Later includes override earlier ones for same keys
 - **Circular includes**: Detected and prevented with clear error messages
 
 **Example Directory Structure:**
+
 ```
 configr.yaml
 packages.yaml
