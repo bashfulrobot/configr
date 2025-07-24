@@ -19,6 +19,14 @@ func TestValidate_ValidConfig(t *testing.T) {
 	
 	config := &Config{
 		Version: "1.0",
+		Repositories: RepositoryManagement{
+			Apt: []AptRepository{
+				{Name: "python39", PPA: "deadsnakes/ppa"},
+			},
+			Flatpak: []FlatpakRepository{
+				{Name: "flathub", URL: "https://flathub.org/repo/flathub.flatpakrepo"},
+			},
+		},
 		Files: map[string]File{
 			"test": {
 				Source:      "test.txt",
@@ -550,6 +558,300 @@ func TestIsValidDebFilePath(t *testing.T) {
 			result := isValidDebFilePath(tt.path)
 			if result != tt.expected {
 				t.Errorf("isValidDebFilePath(%s) = %v, expected %v", tt.path, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Repository validation tests
+
+func TestValidateRepositories_ValidAPTRepositories(t *testing.T) {
+	config := &Config{
+		Version: "1.0",
+		Repositories: RepositoryManagement{
+			Apt: []AptRepository{
+				{Name: "python39", PPA: "deadsnakes/ppa"},
+				{Name: "docker", URI: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable", Key: "https://download.docker.com/linux/ubuntu/gpg.asc"},
+				{Name: "nodejs", URI: "deb https://deb.nodesource.com/node_16.x focal main", Key: "0x9FD3B784BC1C6FC31A8A0A1C1655A0AB68576280"},
+			},
+		},
+	}
+	
+	result := Validate(config, "config.yaml")
+	
+	if result.HasErrors() {
+		t.Errorf("validation should pass for valid APT repositories, got errors: %v", result.Errors)
+	}
+}
+
+func TestValidateRepositories_ValidFlatpakRepositories(t *testing.T) {
+	config := &Config{
+		Version: "1.0",
+		Repositories: RepositoryManagement{
+			Flatpak: []FlatpakRepository{
+				{Name: "flathub", URL: "https://flathub.org/repo/flathub.flatpakrepo"},
+				{Name: "kde", URL: "https://distribute.kde.org/kdeapps.flatpakrepo", User: true},
+				{Name: "gnome", URL: "https://nightly.gnome.org/gnome-nightly.flatpakrepo"},
+			},
+		},
+	}
+	
+	result := Validate(config, "config.yaml")
+	
+	if result.HasErrors() {
+		t.Errorf("validation should pass for valid Flatpak repositories, got errors: %v", result.Errors)
+	}
+}
+
+func TestValidateRepositories_InvalidAPTRepositories(t *testing.T) {
+	tests := []struct {
+		name     string
+		repo     AptRepository
+		errorMsg string
+	}{
+		{
+			name:     "missing ppa and uri",
+			repo:     AptRepository{Name: "test"},
+			errorMsg: "missing repository configuration",
+		},
+		{
+			name:     "both ppa and uri",
+			repo:     AptRepository{Name: "test", PPA: "user/repo", URI: "deb https://example.com/repo stable main"},
+			errorMsg: "conflicting repository configuration",
+		},
+		{
+			name:     "invalid ppa format",
+			repo:     AptRepository{Name: "test", PPA: "invalid-ppa-format"},
+			errorMsg: "invalid PPA format",
+		},
+		{
+			name:     "invalid uri format",
+			repo:     AptRepository{Name: "test", URI: "invalid-uri-format"},
+			errorMsg: "invalid repository URI",
+		},
+		{
+			name:     "invalid gpg key",
+			repo:     AptRepository{Name: "test", PPA: "user/repo", Key: "invalid-key"},
+			errorMsg: "invalid GPG key reference",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Version: "1.0",
+				Repositories: RepositoryManagement{
+					Apt: []AptRepository{tt.repo},
+				},
+			}
+			
+			result := Validate(config, "config.yaml")
+			
+			if !result.HasErrors() {
+				t.Errorf("validation should fail for %s", tt.name)
+				return
+			}
+			
+			found := false
+			for _, err := range result.Errors {
+				if strings.Contains(err.Title, tt.errorMsg) {
+					found = true
+					break
+				}
+			}
+			
+			if !found {
+				t.Errorf("expected error message containing '%s', got errors: %v", tt.errorMsg, result.Errors)
+			}
+		})
+	}
+}
+
+func TestValidateRepositories_InvalidFlatpakRepositories(t *testing.T) {
+	tests := []struct {
+		name     string
+		repo     FlatpakRepository
+		errorMsg string
+	}{
+		{
+			name:     "missing url",
+			repo:     FlatpakRepository{Name: "test"},
+			errorMsg: "missing repository URL",
+		},
+		{
+			name:     "invalid url format",
+			repo:     FlatpakRepository{Name: "test", URL: "ftp://invalid.com/repo"},
+			errorMsg: "invalid repository URL",
+		},
+		{
+			name:     "invalid remote name",
+			repo:     FlatpakRepository{Name: "test@invalid!", URL: "https://example.com/repo.flatpakrepo"},
+			errorMsg: "invalid remote name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Version: "1.0",
+				Repositories: RepositoryManagement{
+					Flatpak: []FlatpakRepository{tt.repo},
+				},
+			}
+			
+			result := Validate(config, "config.yaml")
+			
+			if !result.HasErrors() {
+				t.Errorf("validation should fail for %s", tt.name)
+				return
+			}
+			
+			found := false
+			for _, err := range result.Errors {
+				if strings.Contains(err.Title, tt.errorMsg) {
+					found = true
+					break
+				}
+			}
+			
+			if !found {
+				t.Errorf("expected error message containing '%s', got errors: %v", tt.errorMsg, result.Errors)
+			}
+		})
+	}
+}
+
+func TestIsValidPPAFormat(t *testing.T) {
+	tests := []struct {
+		ppa      string
+		expected bool
+		name     string
+	}{
+		{"deadsnakes/ppa", true, "valid ppa"},
+		{"user/repo", true, "simple user/repo"},
+		{"ubuntu-toolchain-r/test", true, "ppa with hyphens"},
+		{"user", false, "missing slash"},
+		{"user/", false, "missing repo name"},
+		{"/repo", false, "missing user name"},
+		{"user@invalid/repo", false, "invalid characters in user"},
+		{"user/repo@invalid", false, "invalid characters in repo"},
+		{"", false, "empty string"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidPPAFormat(tt.ppa)
+			if result != tt.expected {
+				t.Errorf("isValidPPAFormat(%s) = %v, expected %v", tt.ppa, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidAPTRepositoryURI(t *testing.T) {
+	tests := []struct {
+		uri      string
+		expected bool
+		name     string
+	}{
+		{"deb https://example.com/repo stable main", true, "valid deb uri"},
+		{"deb-src https://example.com/repo stable main", true, "valid deb-src uri"},
+		{"deb [arch=amd64] https://example.com/repo stable main", true, "deb with architecture"},
+		{"deb http://example.com/repo stable main", true, "deb with http"},
+		{"deb file:///path/to/repo stable main", true, "deb with file protocol"},
+		{"rpm https://example.com/repo", false, "non-deb format"},
+		{"https://example.com/repo", false, "missing deb prefix"},
+		{"deb example.com/repo stable main", false, "missing protocol"},
+		{"", false, "empty string"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidAPTRepositoryURI(tt.uri)
+			if result != tt.expected {
+				t.Errorf("isValidAPTRepositoryURI(%s) = %v, expected %v", tt.uri, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidGPGKeyReference(t *testing.T) {
+	tests := []struct {
+		key      string
+		expected bool
+		name     string
+	}{
+		{"https://example.com/key.gpg", true, "valid gpg url"},
+		{"https://example.com/key.asc", true, "valid asc url"},
+		{"0x1234567890ABCDEF", true, "valid key id with 0x prefix"},
+		{"1234567890ABCDEF", true, "valid key id without prefix"},
+		{"9FD3B784BC1C6FC31A8A0A1C1655A0AB68576280", true, "long key id"},
+		{"12345678", true, "short key id"},
+		{"http://example.com/key.gpg", false, "http instead of https"},
+		{"https://example.com/key.txt", false, "wrong file extension"},
+		{"0xGHIJKLMN", false, "invalid hex characters"},
+		{"12345", false, "too short key id"},
+		{"", false, "empty string"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidGPGKeyReference(tt.key)
+			if result != tt.expected {
+				t.Errorf("isValidGPGKeyReference(%s) = %v, expected %v", tt.key, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidFlatpakRepositoryURL(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected bool
+		name     string
+	}{
+		{"https://flathub.org/repo/flathub.flatpakrepo", true, "valid flatpakrepo url"},
+		{"https://example.com/repo/test.flatpakrepo", true, "custom flatpakrepo url"},
+		{"https://example.com/repo/", true, "repository directory url"},
+		{"http://localhost/repo/test.flatpakrepo", true, "http for local testing"},
+		{"ftp://example.com/repo.flatpakrepo", false, "ftp protocol not allowed"},
+		{"https://example.com/file.txt", false, "not a flatpakrepo file"},
+		{"example.com/repo.flatpakrepo", false, "missing protocol"},
+		{"", false, "empty string"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidFlatpakRepositoryURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("isValidFlatpakRepositoryURL(%s) = %v, expected %v", tt.url, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidFlatpakRemoteName(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected bool
+		testName string
+	}{
+		{"flathub", true, "simple name"},
+		{"kde-apps", true, "name with hyphen"},
+		{"gnome_nightly", true, "name with underscore"},
+		{"test123", true, "name with numbers"},
+		{"Test", true, "name with capital letters"},
+		{"@invalid", false, "name starting with special character"},
+		{"test@invalid", false, "name with invalid character"},
+		{"test-", false, "name ending with hyphen"},
+		{"", false, "empty string"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			result := isValidFlatpakRemoteName(tt.name)
+			if result != tt.expected {
+				t.Errorf("isValidFlatpakRemoteName(%s) = %v, expected %v", tt.name, result, tt.expected)
 			}
 		})
 	}
