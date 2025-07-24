@@ -3,7 +3,7 @@
 A single binary configuration management tool for Ubuntu desktop systems. Configr provides package management, configuration file management, and desktop settings management similar to Ansible but contained in a single binary.
 
 ✅ **Currently Implemented**: APT package management, File management, Configuration validation  
-🚧 **In Development**: Flatpak and Snap management, DConf settings
+🚧 **In Development**: Repository management (schema complete), Flatpak and Snap management, DConf settings
 
 **Key Differentiators:**
 - **Professional CLI**: Styled help pages and documentation via charmbracelet/fang
@@ -51,6 +51,15 @@ sudo mv _configr /usr/local/share/zsh/site-functions/
 
 ```yaml
 version: "1.0"
+
+# Optional: Add package repositories (schema ready, implementation in progress)
+repositories:
+  apt:
+    python39:
+      ppa: "deadsnakes/ppa"          # Ubuntu PPA format
+  flatpak:
+    flathub:
+      url: "https://flathub.org/repo/flathub.flatpakrepo"
 
 # Optional: Customize default flags for package managers
 package_defaults:
@@ -117,8 +126,9 @@ configr --help
 
 ### Basic Structure
 
-Configr uses YAML configuration files with four main sections:
+Configr uses YAML configuration files with five main sections:
 
+- `repositories`: Package repositories to add (APT PPAs, Flatpak remotes)
 - `packages`: Software to install via package managers
 - `files`: Configuration files to deploy
 - `dconf`: GNOME desktop settings
@@ -220,6 +230,48 @@ packages:
 - Snap packages often need `--classic` for filesystem access (`code`, `slack`, `postman`)
 - Flatpak allows `--user` vs `--system` installation choices
 - APT supports `--install-suggests`, `--allow-unauthenticated`, `--force-depends`, etc.
+
+### Repository Management
+
+🚧 **Schema Complete, Implementation In Progress**: You can define repositories in YAML, but configr won't manage them yet.
+
+Configr supports managing package repositories for both APT and Flatpak:
+
+```yaml
+repositories:
+  apt:
+    python39:                     # Repository identifier
+      ppa: "deadsnakes/ppa"       # Ubuntu PPA format
+    docker:
+      uri: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+      key: "https://download.docker.com/linux/ubuntu/gpg.asc"  # GPG key (optional)
+    nodejs:
+      uri: "deb https://deb.nodesource.com/node_16.x focal main"
+      key: "0x9FD3B784BC1C6FC31A8A0A1C1655A0AB68576280"  # Key ID format
+  
+  flatpak:
+    flathub:                      # Remote name
+      url: "https://flathub.org/repo/flathub.flatpakrepo"  # Required
+      user: false                 # Optional: system-wide (default)
+    kde:
+      url: "https://distribute.kde.org/kdeapps.flatpakrepo"
+      user: true                  # User-only installation
+```
+
+**APT Repository Options:**
+- `ppa`: Ubuntu PPA in `user/repo` format (uses `add-apt-repository`)
+- `uri`: Custom repository URI in standard sources.list format
+- `key`: GPG key URL (HTTPS) or keyserver key ID (hex format)
+
+**Flatpak Repository Options:**
+- `url`: Repository URL (required) - typically `.flatpakrepo` files
+- `user`: Install for user only vs system-wide (default: false)
+
+**Repository Features:**
+- **Validation**: Comprehensive format checking with helpful error messages
+- **Security**: HTTPS enforcement for keys, path safety validation
+- **Flexibility**: Support both PPA shortcuts and full repository URIs
+- **Integration**: Works with existing three-tier package flag system
 
 ### File Management
 
