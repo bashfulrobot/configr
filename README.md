@@ -1,10 +1,9 @@
 # Configr
 
-** WORK IN PROGRESS - NOT WORKING, HEAVY DEV. **
-
------------------------------------------------------
-
 A single binary configuration management tool for Ubuntu desktop systems. Configr provides package management, configuration file management, and desktop settings management similar to Ansible but contained in a single binary.
+
+✅ **Currently Implemented**: APT package management, File management, Configuration validation  
+🚧 **In Development**: Flatpak and Snap management, DConf settings
 
 **Key Differentiators:**
 - **Professional CLI**: Styled help pages and documentation via charmbracelet/fang
@@ -165,6 +164,9 @@ packages:
     - git                            # Uses: ["-y"] from package_defaults
     - "docker.io":                   # Per-package override
         flags: ["-y", "--install-suggests"]
+    - "./custom-app.deb":            # Local .deb file installation
+        flags: ["-y", "--force-depends"]
+    - "/opt/downloads/package.deb"   # Absolute path .deb file
         
   flatpak:
     - org.mozilla.firefox            # Uses: ["--user"] from package_defaults
@@ -182,10 +184,42 @@ packages:
 - **Snap**: `[]` - No defaults, snaps are interactive by design
 - **Flatpak**: `["--system", "--assumeyes"]` - System-wide, non-interactive
 
+**APT Package Management:**
+
+Configr provides comprehensive APT support including local .deb file installation:
+
+```yaml
+packages:
+  apt:
+    # Repository packages (standard)
+    - git
+    - curl
+    - build-essential
+    
+    # Repository packages with custom flags
+    - "nginx":
+        flags: ["-y", "--install-suggests"]
+    
+    # Local .deb files (relative paths)
+    - "./downloads/custom-app.deb":
+        flags: ["-y", "--force-depends"]
+    
+    # Local .deb files (absolute paths)
+    - "/home/user/packages/proprietary.deb"
+```
+
+**APT Features:**
+- **Repository packages**: Standard Ubuntu/Debian package installation
+- **Local .deb files**: Install packages from filesystem paths
+- **Mixed installations**: Seamlessly combine repository and local packages
+- **Smart grouping**: Groups packages by flags to minimize system calls
+- **State checking**: Avoids reinstalling already installed packages
+- **Path validation**: Prevents malicious .deb paths with security checks
+
 **Common Flag Examples:**
 - Snap packages often need `--classic` for filesystem access (`code`, `slack`, `postman`)
 - Flatpak allows `--user` vs `--system` installation choices
-- APT supports `--install-suggests`, `--allow-unauthenticated`, etc.
+- APT supports `--install-suggests`, `--allow-unauthenticated`, `--force-depends`, etc.
 
 ### File Management
 
@@ -346,6 +380,9 @@ The improved formatting makes configr feel trustworthy and professional for syst
 See the `examples/` directory for complete configuration examples:
 
 - `examples/desktop-dev.yaml` - Development environment setup
+- `examples/apt-simple.yaml` - Basic APT package management
+- `examples/apt-packages.yaml` - Comprehensive APT features showcase  
+- `examples/advanced-flags.yaml` - Three-tier flag system demonstration
 
 ## CLI Commands
 
