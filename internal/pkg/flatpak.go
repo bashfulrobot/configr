@@ -268,6 +268,41 @@ func (fm *FlatpakManager) checkFlatpakAvailable() error {
 	return nil
 }
 
+// RemovePackages removes multiple Flatpak applications that are no longer in the configuration
+func (fm *FlatpakManager) RemovePackages(packagesToRemove []string) error {
+	if len(packagesToRemove) == 0 {
+		return nil
+	}
+
+	fm.logger.Info("Removing Flatpak packages no longer in configuration", "packages", packagesToRemove)
+
+	// Filter to only remove packages that are actually installed
+	installedToRemove := make([]string, 0, len(packagesToRemove))
+	for _, pkg := range packagesToRemove {
+		if installed, err := fm.isPackageInstalled(pkg); err != nil {
+			fm.logger.Warn("Could not check if Flatpak package is installed", "package", pkg, "error", err)
+		} else if installed {
+			installedToRemove = append(installedToRemove, pkg)
+		}
+	}
+
+	if len(installedToRemove) == 0 {
+		fm.logger.Info("No installed Flatpak packages to remove")
+		return nil
+	}
+
+	// Remove packages one by one (more reliable than batch removal)
+	for _, pkg := range installedToRemove {
+		if err := fm.UninstallPackage(pkg, []string{"--assumeyes"}); err != nil {
+			fm.logger.Error("Failed to remove Flatpak package", "package", pkg, "error", err)
+			return fmt.Errorf("failed to remove Flatpak package %s: %w", pkg, err)
+		}
+		config.Success("Removed Flatpak package: %s", pkg)
+	}
+
+	return nil
+}
+
 // ValidatePackageNames validates Flatpak package names (application IDs)
 func (fm *FlatpakManager) ValidatePackageNames(packages []config.PackageEntry) error {
 	fm.logger.Debug("Validating Flatpak package names", "count", len(packages))

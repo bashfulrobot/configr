@@ -29,75 +29,87 @@ func NewFileManager(logger *log.Logger, dryRun bool, configDir string) *FileMana
 	}
 }
 
-// DeployFiles processes all files in the configuration
-func (fm *FileManager) DeployFiles(files map[string]config.File) error {
+// DeployFiles processes all files in the configuration and returns deployed file info
+func (fm *FileManager) DeployFiles(files map[string]config.File) ([]ManagedFile, error) {
 	if len(files) == 0 {
 		fm.logger.Debug("No files to deploy")
-		return nil
+		return []ManagedFile{}, nil
 	}
 
 	fm.logger.Info("Processing file deployments", "count", len(files))
 
+	var deployedFiles []ManagedFile
 	for name, file := range files {
-		if err := fm.deployFile(name, file); err != nil {
-			return fmt.Errorf("failed to deploy file '%s': %w", name, err)
+		managedFile, err := fm.deployFile(name, file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deploy file '%s': %w", name, err)
 		}
+		deployedFiles = append(deployedFiles, managedFile)
 	}
 
 	fm.logger.Info("✓ All files deployed successfully")
-	return nil
+	return deployedFiles, nil
 }
 
-// deployFile handles the deployment of a single file
-func (fm *FileManager) deployFile(name string, file config.File) error {
+// deployFile handles the deployment of a single file and returns file info
+func (fm *FileManager) deployFile(name string, file config.File) (ManagedFile, error) {
 	fm.logger.Debug("Deploying file", "name", name, "source", file.Source, "destination", file.Destination)
 
 	// Resolve source path
 	sourcePath, err := fm.resolveSourcePath(file.Source)
 	if err != nil {
-		return fmt.Errorf("failed to resolve source path: %w", err)
+		return ManagedFile{}, fmt.Errorf("failed to resolve source path: %w", err)
 	}
 
 	// Resolve destination path
 	destPath, err := fm.resolveDestinationPath(file.Destination)
 	if err != nil {
-		return fmt.Errorf("failed to resolve destination path: %w", err)
+		return ManagedFile{}, fmt.Errorf("failed to resolve destination path: %w", err)
 	}
 
 	// Check if source file exists
 	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
-		return fmt.Errorf("source file does not exist: %s", sourcePath)
+		return ManagedFile{}, fmt.Errorf("source file does not exist: %s", sourcePath)
 	}
 
 	// Create destination directory if it doesn't exist
 	destDir := filepath.Dir(destPath)
 	if err := fm.ensureDirectory(destDir); err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
+		return ManagedFile{}, fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
 	// Handle existing file (backup if needed)
-	if err := fm.handleExistingFile(destPath, file.Backup); err != nil {
-		return fmt.Errorf("failed to handle existing file: %w", err)
+	backupPath, err := fm.handleExistingFile(destPath, file.Backup)
+	if err != nil {
+		return ManagedFile{}, fmt.Errorf("failed to handle existing file: %w", err)
 	}
 
 	// Deploy file (either copy or symlink)
+	isSymlink := !file.Copy
 	if file.Copy {
 		if err := fm.copyFile(sourcePath, destPath); err != nil {
-			return fmt.Errorf("failed to copy file: %w", err)
+			return ManagedFile{}, fmt.Errorf("failed to copy file: %w", err)
 		}
 	} else {
 		if err := fm.createSymlink(sourcePath, destPath); err != nil {
-			return fmt.Errorf("failed to create symlink: %w", err)
+			return ManagedFile{}, fmt.Errorf("failed to create symlink: %w", err)
 		}
 	}
 
 	// Set ownership and permissions if specified
 	if err := fm.setFileAttributes(destPath, file); err != nil {
-		return fmt.Errorf("failed to set file attributes: %w", err)
+		return ManagedFile{}, fmt.Errorf("failed to set file attributes: %w", err)
 	}
 
 	fm.logger.Info("✓ File deployed", "name", name, "destination", destPath)
-	return nil
+	
+	// Return managed file info
+	return ManagedFile{
+		Name:        name,
+		Destination: destPath,
+		IsSymlink:   isSymlink,
+		BackupPath:  backupPath,
+	}, nil
 }
 
 // resolveSourcePath resolves the source file path, handling relative paths
@@ -159,19 +171,21 @@ func (fm *FileManager) ensureDirectory(dir string) error {
 }
 
 // handleExistingFile handles existing files at the destination, optionally creating backups
-func (fm *FileManager) handleExistingFile(destPath string, backup bool) error {
+// Returns the backup path if a backup was created, empty string otherwise
+func (fm *FileManager) handleExistingFile(destPath string, backup bool) (string, error) {
 	if _, err := os.Lstat(destPath); os.IsNotExist(err) {
 		// File doesn't exist, nothing to handle
-		return nil
+		return "", nil
 	}
 
 	if fm.dryRun {
 		if backup {
 			fm.logger.Debug("DRY RUN: Would backup existing file", "path", destPath)
+			return fmt.Sprintf("%s.backup.%s", destPath, time.Now().Format("20060102-150405")), nil
 		} else {
 			fm.logger.Debug("DRY RUN: Would remove existing file", "path", destPath)
+			return "", nil
 		}
-		return nil
 	}
 
 	// Check if it's already a symlink to our source (only relevant for symlink mode)
@@ -182,7 +196,7 @@ func (fm *FileManager) handleExistingFile(destPath string, backup bool) error {
 		// If it's already pointing to the right place, we're done
 		if filepath.Clean(link) == filepath.Clean(filepath.Join(sourceDir, filepath.Base(link))) {
 			fm.logger.Debug("File already correctly symlinked", "path", destPath)
-			return nil
+			return "", nil
 		}
 	}
 
@@ -191,16 +205,16 @@ func (fm *FileManager) handleExistingFile(destPath string, backup bool) error {
 		fm.logger.Info("⚠ Backing up existing file", "from", destPath, "to", backupPath)
 		
 		if err := os.Rename(destPath, backupPath); err != nil {
-			return fmt.Errorf("failed to backup file: %w", err)
+			return "", fmt.Errorf("failed to backup file: %w", err)
 		}
+		return backupPath, nil
 	} else {
 		fm.logger.Info("⚠ Removing existing file", "path", destPath)
 		if err := os.Remove(destPath); err != nil {
-			return fmt.Errorf("failed to remove existing file: %w", err)
+			return "", fmt.Errorf("failed to remove existing file: %w", err)
 		}
+		return "", nil
 	}
-
-	return nil
 }
 
 // createSymlink creates a symlink from source to destination
@@ -508,5 +522,151 @@ func (fm *FileManager) testWriteAccess(dir string) error {
 	}
 	f.Close()
 	os.Remove(tempFile) // Clean up
+	return nil
+}
+
+// RemoveFiles removes files that are no longer in the configuration
+func (fm *FileManager) RemoveFiles(filesToRemove []ManagedFile) error {
+	if len(filesToRemove) == 0 {
+		fm.logger.Debug("No files to remove")
+		return nil
+	}
+
+	fm.logger.Info("Removing files no longer in configuration", "count", len(filesToRemove))
+
+	for _, file := range filesToRemove {
+		if err := fm.removeFile(file); err != nil {
+			fm.logger.Error("Failed to remove file", "name", file.Name, "destination", file.Destination, "error", err)
+			return fmt.Errorf("failed to remove file '%s': %w", file.Name, err)
+		}
+	}
+
+	fm.logger.Info("✓ All files removed successfully")
+	return nil
+}
+
+// removeFile removes a single managed file with safety checks
+func (fm *FileManager) removeFile(file ManagedFile) error {
+	fm.logger.Debug("Removing file", "name", file.Name, "destination", file.Destination, "is_symlink", file.IsSymlink)
+
+	// Check if file still exists at destination
+	fileInfo, err := os.Lstat(file.Destination)
+	if os.IsNotExist(err) {
+		fm.logger.Debug("File already removed", "destination", file.Destination)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to check file status: %w", err)
+	}
+
+	// Safety check: verify file type matches what we expect
+	isCurrentlySymlink := fileInfo.Mode()&os.ModeSymlink != 0
+	if isCurrentlySymlink != file.IsSymlink {
+		fm.logger.Warn("File type changed since deployment", 
+			"destination", file.Destination, 
+			"expected_symlink", file.IsSymlink, 
+			"actual_symlink", isCurrentlySymlink)
+		
+		// For safety, don't remove files that changed type
+		return fmt.Errorf("file type changed since deployment, skipping removal for safety: %s", file.Destination)
+	}
+
+	// Additional safety check for symlinks - verify they point to expected location
+	if file.IsSymlink {
+		if err := fm.verifySymlinkSafety(file.Destination); err != nil {
+			fm.logger.Warn("Symlink safety check failed", "destination", file.Destination, "error", err)
+			return fmt.Errorf("symlink safety check failed, skipping removal: %w", err)
+		}
+	}
+
+	// For copied files, check if user has modified the file
+	if !file.IsSymlink {
+		if modified, err := fm.isFileModifiedByUser(file.Destination, file); err != nil {
+			fm.logger.Warn("Could not check if file was modified", "destination", file.Destination, "error", err)
+			// Continue with removal but log the warning
+		} else if modified {
+			fm.logger.Warn("File appears to be modified by user, skipping removal for safety", "destination", file.Destination)
+			return fmt.Errorf("file appears modified by user, skipping removal for safety: %s", file.Destination)
+		}
+	}
+
+	if fm.dryRun {
+		fm.logger.Info("DRY RUN: Would remove file", "destination", file.Destination)
+		return nil
+	}
+
+	// Perform the removal
+	if err := os.Remove(file.Destination); err != nil {
+		return fmt.Errorf("failed to remove file: %w", err)
+	}
+
+	fm.logger.Info("✓ File removed", "name", file.Name, "destination", file.Destination)
+
+	// If there was a backup, optionally restore it
+	if file.BackupPath != "" {
+		if err := fm.offerBackupRestore(file); err != nil {
+			fm.logger.Warn("Could not restore backup", "backup", file.BackupPath, "error", err)
+			// Don't fail the removal operation for backup restoration issues
+		}
+	}
+
+	return nil
+}
+
+// verifySymlinkSafety checks if a symlink is safe to remove
+func (fm *FileManager) verifySymlinkSafety(symlinkPath string) error {
+	target, err := os.Readlink(symlinkPath)
+	if err != nil {
+		return fmt.Errorf("failed to read symlink: %w", err)
+	}
+
+	// Basic safety check - ensure it's not pointing to system files
+	if strings.HasPrefix(target, "/etc/") || strings.HasPrefix(target, "/usr/") || strings.HasPrefix(target, "/bin/") {
+		return fmt.Errorf("symlink points to system directory, unsafe to remove: %s", target)
+	}
+
+	return nil
+}
+
+// isFileModifiedByUser attempts to detect if a copied file was modified by the user
+func (fm *FileManager) isFileModifiedByUser(filePath string, file ManagedFile) (bool, error) {
+	// This is a basic heuristic - in a full implementation, you might:
+	// 1. Store checksums of deployed files
+	// 2. Compare modification times
+	// 3. Use more sophisticated change detection
+	
+	// For now, we'll be conservative and assume files might be modified
+	// A more sophisticated implementation would store file hashes in the state
+	
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return false, err
+	}
+
+	// If file is very recent (deployed in last few minutes), probably not modified
+	if time.Since(fileInfo.ModTime()) < 5*time.Minute {
+		return false, nil
+	}
+
+	// For now, assume older copied files might have been modified
+	// This is conservative but safe
+	return true, nil
+}
+
+// offerBackupRestore handles backup restoration when removing files
+func (fm *FileManager) offerBackupRestore(file ManagedFile) error {
+	// Check if backup still exists
+	if _, err := os.Stat(file.BackupPath); os.IsNotExist(err) {
+		fm.logger.Debug("Backup file no longer exists", "backup", file.BackupPath)
+		return nil
+	}
+
+	fm.logger.Info("📁 Backup available for removed file", "backup", file.BackupPath, "original", file.Destination)
+	// In a full implementation, you might:
+	// 1. Automatically restore backups
+	// 2. Prompt user for restoration
+	// 3. Move backups to a cleanup directory
+	
+	// For now, just log that backups are available
 	return nil
 }

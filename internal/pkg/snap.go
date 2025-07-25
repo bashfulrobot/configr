@@ -326,6 +326,41 @@ func (sm *SnapManager) checkSnapAvailable() error {
 	return nil
 }
 
+// RemovePackages removes multiple Snap packages that are no longer in the configuration
+func (sm *SnapManager) RemovePackages(packagesToRemove []string) error {
+	if len(packagesToRemove) == 0 {
+		return nil
+	}
+
+	sm.logger.Info("Removing Snap packages no longer in configuration", "packages", packagesToRemove)
+
+	// Filter to only remove packages that are actually installed
+	installedToRemove := make([]string, 0, len(packagesToRemove))
+	for _, pkg := range packagesToRemove {
+		if installed, err := sm.isPackageInstalled(pkg); err != nil {
+			sm.logger.Warn("Could not check if Snap package is installed", "package", pkg, "error", err)
+		} else if installed {
+			installedToRemove = append(installedToRemove, pkg)
+		}
+	}
+
+	if len(installedToRemove) == 0 {
+		sm.logger.Info("No installed Snap packages to remove")
+		return nil
+	}
+
+	// Remove packages one by one (snap remove works on individual packages)
+	for _, pkg := range installedToRemove {
+		if err := sm.UninstallPackage(pkg, []string{}); err != nil {
+			sm.logger.Error("Failed to remove Snap package", "package", pkg, "error", err)
+			return fmt.Errorf("failed to remove Snap package %s: %w", pkg, err)
+		}
+		config.Success("Removed Snap package: %s", pkg)
+	}
+
+	return nil
+}
+
 // ValidatePackageNames validates Snap package names
 func (sm *SnapManager) ValidatePackageNames(packages []config.PackageEntry) error {
 	sm.logger.Debug("Validating Snap package names", "count", len(packages))
