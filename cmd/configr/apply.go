@@ -13,7 +13,9 @@ import (
 )
 
 var (
-	dryRun bool
+	dryRun          bool
+	removePackages  bool
+	useOptimization bool
 )
 
 var applyCmd = &cobra.Command{
@@ -22,17 +24,21 @@ var applyCmd = &cobra.Command{
 	Long: `Apply loads and applies the configuration to your system.
 
 This command will:
+- Remove packages no longer in configuration (if --remove-packages=true)
 - Add APT and Flatpak repositories
 - Deploy and symlink files to their destinations
 - Install APT, Flatpak, and Snap packages
 - Apply dconf settings for desktop configuration
 - Create backups of existing files when requested
+- Track package state for future removal operations
 
 By default, it looks for 'configr.yaml' in standard locations.`,
-	Example: `  configr apply                       # Apply default config
-  configr apply my-config.yaml        # Apply specific config
-  configr apply --dry-run             # Preview changes without applying
-  configr --config custom.yaml apply  # Use custom config file`,
+	Example: `  configr apply                         # Apply default config
+  configr apply my-config.yaml          # Apply specific config
+  configr apply --dry-run               # Preview changes without applying
+  configr apply --remove-packages=false # Skip package removal
+  configr apply --optimize=false        # Disable caching and optimization
+  configr --config custom.yaml apply    # Use custom config file`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runApply,
 }
@@ -42,6 +48,8 @@ func init() {
 	
 	// Command-specific flags
 	applyCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview changes without applying them")
+	applyCmd.Flags().BoolVar(&removePackages, "remove-packages", true, "remove packages that are no longer in configuration")
+	applyCmd.Flags().BoolVar(&useOptimization, "optimize", true, "enable caching and optimization for faster runs")
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -75,16 +83,36 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Set config file in viper and load configuration  
-	logger.Info("Loading configuration", "file", configPath)
-	viper.SetConfigFile(configPath)
-	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-	
-	cfg, err := config.LoadWithIncludes()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	// Load configuration with optimization if enabled
+	var cfg *config.Config
+	var configPaths []string
+	var err error
+
+	if useOptimization {
+		logger.Info("Loading configuration with optimization", "file", configPath)
+		
+		// Initialize cache manager
+		cacheManager := pkg.NewCacheManager(logger)
+		optimizedLoader := config.NewOptimizedLoader(logger, cacheManager)
+		
+		cfg, configPaths, err = optimizedLoader.LoadConfigurationOptimized(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config with optimization: %w", err)
+		}
+	} else {
+		logger.Info("Loading configuration (standard mode)", "file", configPath)
+		
+		// Standard loading
+		viper.SetConfigFile(configPath)
+		if err := viper.ReadInConfig(); err != nil {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+		
+		cfg, err = config.LoadWithIncludes()
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		configPaths = []string{configPath}
 	}
 
 	// Validate configuration
@@ -113,6 +141,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	// Apply file configurations
+	var deployedFiles []pkg.ManagedFile
 	if len(cfg.Files) > 0 {
 		logger.Info("Applying file configurations")
 		fileManager := pkg.NewFileManager(logger, dryRun, configDir)
@@ -122,13 +151,15 @@ func runApply(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("permission validation failed: %w", err)
 		}
 
-		if err := fileManager.DeployFiles(cfg.Files); err != nil {
+		var err error
+		deployedFiles, err = fileManager.DeployFiles(cfg.Files)
+		if err != nil {
 			return fmt.Errorf("failed to deploy files: %w", err)
 		}
 	}
 
 	// Apply package configurations
-	if err := applyPackageConfigurations(cfg, logger, dryRun); err != nil {
+	if err := applyPackageConfigurations(cfg, deployedFiles, logger, dryRun, useOptimization); err != nil {
 		return fmt.Errorf("failed to apply package configurations: %w", err)
 	}
 
@@ -185,13 +216,52 @@ func findConfigFile() (string, error) {
 }
 
 // applyPackageConfigurations handles package management for all supported package managers
-func applyPackageConfigurations(cfg *config.Config, logger *log.Logger, dryRun bool) error {
+func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedFile, logger *log.Logger, dryRun bool, useOptimization bool) error {
+	// Initialize state manager for package removal tracking
+	stateManager := pkg.NewStateManager(logger)
+	
+	// Get packages to remove (packages in previous state but not in current config)
+	packagesToRemove, err := stateManager.GetPackagesToRemove(cfg)
+	if err != nil {
+		logger.Warn("Could not determine packages to remove", "error", err)
+		// Continue with installation even if removal tracking fails
+		packagesToRemove = &pkg.ManagedPackages{}
+	}
+
+	// Get files to remove (files in previous state but not in current config)
+	filesToRemove, err := stateManager.GetFilesToRemove(cfg)
+	if err != nil {
+		logger.Warn("Could not determine files to remove", "error", err)
+		// Continue with deployment even if file removal tracking fails
+		filesToRemove = []pkg.ManagedFile{}
+	}
+	
+	// Remove packages and files that are no longer in configuration (if enabled)
+	if removePackages {
+		if err := removePackagesNotInConfig(packagesToRemove, logger, dryRun); err != nil {
+			return fmt.Errorf("failed to remove packages: %w", err)
+		}
+		if err := removeFilesNotInConfig(filesToRemove, configDir, logger, dryRun); err != nil {
+			return fmt.Errorf("failed to remove files: %w", err)
+		}
+	} else {
+		logger.Debug("Package and file removal disabled by --remove-packages=false flag")
+	}
 	// Handle APT packages
 	if len(cfg.Packages.Apt) > 0 {
 		logger.Debug("Applying APT package configurations", "count", len(cfg.Packages.Apt))
-		aptManager := pkg.NewAptManager(logger, dryRun)
-		if err := aptManager.InstallPackages(cfg.Packages.Apt, cfg.PackageDefaults); err != nil {
-			return fmt.Errorf("APT package installation failed: %w", err)
+		
+		if useOptimization {
+			cacheManager := pkg.NewCacheManager(logger)
+			aptManager := pkg.NewOptimizedAptManager(logger, dryRun, cacheManager)
+			if err := aptManager.InstallPackagesOptimized(cfg.Packages.Apt, cfg.PackageDefaults); err != nil {
+				return fmt.Errorf("APT package installation failed: %w", err)
+			}
+		} else {
+			aptManager := pkg.NewAptManager(logger, dryRun)
+			if err := aptManager.InstallPackages(cfg.Packages.Apt, cfg.PackageDefaults); err != nil {
+				return fmt.Errorf("APT package installation failed: %w", err)
+			}
 		}
 	}
 
@@ -225,7 +295,59 @@ func applyPackageConfigurations(cfg *config.Config, logger *log.Logger, dryRun b
 		}
 	}
 
+	// Update state file with current configuration (only if not dry-run)
+	if !dryRun {
+		if err := stateManager.UpdateState(cfg, deployedFiles); err != nil {
+			logger.Warn("Failed to update state", "error", err)
+			// Don't fail the entire operation for state tracking issues
+		}
+	}
+
 	return nil
+}
+
+// removePackagesNotInConfig removes packages that are no longer in the configuration
+func removePackagesNotInConfig(packagesToRemove *pkg.ManagedPackages, logger *log.Logger, dryRun bool) error {
+	// Remove APT packages
+	if len(packagesToRemove.Apt) > 0 {
+		logger.Info("Removing APT packages no longer in configuration", "count", len(packagesToRemove.Apt))
+		aptManager := pkg.NewAptManager(logger, dryRun)
+		if err := aptManager.RemovePackages(packagesToRemove.Apt); err != nil {
+			return fmt.Errorf("APT package removal failed: %w", err)
+		}
+	}
+
+	// Remove Flatpak packages
+	if len(packagesToRemove.Flatpak) > 0 {
+		logger.Info("Removing Flatpak packages no longer in configuration", "count", len(packagesToRemove.Flatpak))
+		flatpakManager := pkg.NewFlatpakManager(logger, dryRun)
+		if err := flatpakManager.RemovePackages(packagesToRemove.Flatpak); err != nil {
+			return fmt.Errorf("Flatpak package removal failed: %w", err)
+		}
+	}
+
+	// Remove Snap packages
+	if len(packagesToRemove.Snap) > 0 {
+		logger.Info("Removing Snap packages no longer in configuration", "count", len(packagesToRemove.Snap))
+		snapManager := pkg.NewSnapManager(logger, dryRun)
+		if err := snapManager.RemovePackages(packagesToRemove.Snap); err != nil {
+			return fmt.Errorf("Snap package removal failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// removeFilesNotInConfig removes files that are no longer in the configuration
+func removeFilesNotInConfig(filesToRemove []pkg.ManagedFile, configDir string, logger *log.Logger, dryRun bool) error {
+	if len(filesToRemove) == 0 {
+		return nil
+	}
+
+	logger.Info("Removing files no longer in configuration", "count", len(filesToRemove))
+	fileManager := pkg.NewFileManager(logger, dryRun, configDir)
+	
+	return fileManager.RemoveFiles(filesToRemove)
 }
 
 // applyRepositoryConfigurations handles repository management for all supported repository types
