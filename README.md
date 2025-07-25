@@ -25,7 +25,16 @@ A single binary configuration management tool for Ubuntu desktop systems. Config
 # Build from source
 git clone https://github.com/bashfulrobot/configr
 cd configr
-go build -o configr .
+
+# Build with version injection using just
+just build
+
+# Or build manually
+VERSION=$(git describe --tags --always --dirty)
+go build -ldflags "-X github.com/bashfulrobot/configr/cmd/configr.Version=${VERSION}" -o configr .
+
+# Or for a release build with a specific version
+go build -ldflags "-X github.com/bashfulrobot/configr/cmd/configr.Version=v1.2.3" -o configr .
 
 # Make it available system-wide
 sudo mv configr /usr/local/bin/

@@ -7,6 +7,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Version is set at build time via -ldflags
+var Version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:   "configr",
 	Short: "Desktop Linux configuration management",
@@ -19,7 +22,7 @@ Use 'configr validate' to check your configuration or 'configr --help' for more 
 	Example: `  configr validate                    # Validate default config
   configr validate my-config.yaml     # Validate specific file  
   configr --config custom.yaml validate # Use custom config file`,
-	Version: "dev",
+	Version: Version,
 }
 
 // Execute is kept for backward compatibility but deprecated
