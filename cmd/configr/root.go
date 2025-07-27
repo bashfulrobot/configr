@@ -56,6 +56,9 @@ func initConfig() {
 	// Use explicit config file if provided
 	if configFile := viper.GetString("config"); configFile != "" {
 		viper.SetConfigFile(configFile)
+	} else if configEnv := os.Getenv("CONFIGR_CONFIG"); configEnv != "" {
+		// Use CONFIGR_CONFIG environment variable
+		viper.SetConfigFile(configEnv)
 	} else {
 		// Search for config file in standard locations
 		viper.SetConfigName("configr")
@@ -72,6 +75,14 @@ func initConfig() {
 	// Environment variable support
 	viper.SetEnvPrefix("CONFIGR")
 	viper.AutomaticEnv()
+	
+	// Bind additional environment variables
+	viper.BindEnv("verbose", "CONFIGR_VERBOSE")
+	viper.BindEnv("no_color", "CONFIGR_NO_COLOR")
+	viper.BindEnv("dry_run", "CONFIGR_DRY_RUN")
+	viper.BindEnv("interactive", "CONFIGR_INTERACTIVE")
+	viper.BindEnv("remove_packages", "CONFIGR_REMOVE_PACKAGES")
+	viper.BindEnv("optimize", "CONFIGR_OPTIMIZE")
 
 	// Don't error here - let individual commands handle config loading
 }

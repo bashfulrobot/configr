@@ -16,6 +16,8 @@ var (
 	dryRun          bool
 	removePackages  bool
 	useOptimization bool
+	interactiveMode bool
+	showPreview     bool
 )
 
 var applyCmd = &cobra.Command{
@@ -31,11 +33,18 @@ This command will:
 - Apply dconf settings for desktop configuration
 - Create backups of existing files when requested
 - Track package state for future removal operations
+- Interactively resolve file conflicts when --interactive flag is used
+
+Interactive features include:
+- Conflict resolution prompts for existing files
+- File diff preview before replacement
+- Interactive permission and ownership configuration
 
 By default, it looks for 'configr.yaml' in standard locations.`,
 	Example: `  configr apply                         # Apply default config
   configr apply my-config.yaml          # Apply specific config
   configr apply --dry-run               # Preview changes without applying
+  configr apply --interactive           # Enable interactive prompts
   configr apply --remove-packages=false # Skip package removal
   configr apply --optimize=false        # Disable caching and optimization
   configr --config custom.yaml apply    # Use custom config file`,
@@ -50,6 +59,8 @@ func init() {
 	applyCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview changes without applying them")
 	applyCmd.Flags().BoolVar(&removePackages, "remove-packages", true, "remove packages that are no longer in configuration")
 	applyCmd.Flags().BoolVar(&useOptimization, "optimize", true, "enable caching and optimization for faster runs")
+	applyCmd.Flags().BoolVar(&interactiveMode, "interactive", false, "enable interactive prompts for conflicts and permissions")
+	applyCmd.Flags().BoolVar(&showPreview, "preview", false, "show configuration preview before applying")
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -64,6 +75,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if viper.GetBool("verbose") {
 		logger.SetLevel(log.DebugLevel)
 	}
+
+	// Initialize UX manager for enhanced user experience
+	uxManager := pkg.NewUXManager(logger, dryRun)
 
 	// Disable color if requested  
 	// Note: color profile setting would require termenv import
@@ -83,49 +97,88 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Load configuration with optimization if enabled
+	// Load configuration with enhanced UX
 	var cfg *config.Config
-	var configPaths []string
 	var err error
+	configDir := filepath.Dir(configPath)
 
+	// Show loading spinner for configuration
+	loadSpinner, loadDone := uxManager.ShowConfigLoadSpinner(useOptimization)
+	
 	if useOptimization {
-		logger.Info("Loading configuration with optimization", "file", configPath)
+		logger.Debug("Loading configuration with optimization", "file", configPath)
 		
 		// Initialize cache manager
 		cacheManager := pkg.NewCacheManager(logger)
-		optimizedLoader := config.NewOptimizedLoader(logger, cacheManager)
+		optimizedLoader := pkg.NewOptimizedLoader(logger, cacheManager)
 		
-		cfg, configPaths, err = optimizedLoader.LoadConfigurationOptimized(configPath)
+		cfg, _, err = optimizedLoader.LoadConfigurationOptimized(configPath)
 		if err != nil {
+			if loadSpinner != nil {
+				loadDone <- pkg.SpinnerDoneMsg{Success: false, Error: err}
+				loadSpinner.Kill()
+			}
 			return fmt.Errorf("failed to load config with optimization: %w", err)
 		}
 	} else {
-		logger.Info("Loading configuration (standard mode)", "file", configPath)
+		logger.Debug("Loading configuration (standard mode)", "file", configPath)
 		
 		// Standard loading
 		viper.SetConfigFile(configPath)
 		if err := viper.ReadInConfig(); err != nil {
+			if loadSpinner != nil {
+				loadDone <- pkg.SpinnerDoneMsg{Success: false, Error: err}
+				loadSpinner.Kill()
+			}
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
 		
 		cfg, err = config.LoadWithIncludes()
 		if err != nil {
+			if loadSpinner != nil {
+				loadDone <- pkg.SpinnerDoneMsg{Success: false, Error: err}
+				loadSpinner.Kill()
+			}
 			return fmt.Errorf("failed to load config: %w", err)
 		}
-		configPaths = []string{configPath}
+	}
+	
+	// Complete loading spinner
+	if loadSpinner != nil {
+		loadDone <- pkg.SpinnerDoneMsg{Success: true}
+		loadSpinner.Kill()
 	}
 
-	// Validate configuration
+	// Validate configuration with enhanced UX
+	validationSpinner, validationDone := uxManager.ShowValidationSpinner()
+	
 	logger.Debug("Validating configuration")
 	result := config.Validate(cfg, configPath)
-	if result.HasErrors() {
-		fmt.Fprint(os.Stderr, config.FormatValidationResultSimple(result))
-		return fmt.Errorf("configuration validation failed")
+	
+	// Complete validation spinner
+	if validationSpinner != nil {
+		validationDone <- pkg.SpinnerDoneMsg{Success: !result.HasErrors()}
+		validationSpinner.Kill()
+	}
+	
+	// Show enhanced validation summary
+	if result.HasErrors() || len(result.Warnings) > 0 {
+		fmt.Fprint(os.Stderr, uxManager.FormatValidationSummary(result))
+		if result.HasErrors() {
+			return fmt.Errorf("configuration validation failed")
+		}
 	}
 
-	// Show warnings if any
-	if len(result.Warnings) > 0 {
-		fmt.Fprint(os.Stderr, config.FormatValidationResultSimple(result))
+	// Show configuration preview if requested
+	if showPreview {
+		fmt.Print(uxManager.ShowConfigPreview(cfg))
+		fmt.Print("\nDo you want to continue? [y/N]: ")
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" && response != "yes" && response != "Yes" {
+			logger.Info("Operation cancelled by user")
+			return nil
+		}
 	}
 
 	if dryRun {
@@ -133,7 +186,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get config directory for relative path resolution
-	configDir := filepath.Dir(configPath)
+	// configDir already declared above
 
 	// Apply repository configurations first (may be needed for package installations)
 	if err := applyRepositoryConfigurations(cfg, logger, dryRun); err != nil {
@@ -145,6 +198,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if len(cfg.Files) > 0 {
 		logger.Info("Applying file configurations")
 		fileManager := pkg.NewFileManager(logger, dryRun, configDir)
+		
+		// Enable interactive mode on all files if global flag is set
+		if interactiveMode {
+			cfg.Files = enableInteractiveModeOnFiles(cfg.Files)
+		}
 		
 		// Validate file permissions before proceeding
 		if err := fileManager.ValidateFilePermissions(cfg.Files); err != nil {
@@ -159,7 +217,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	// Apply package configurations
-	if err := applyPackageConfigurations(cfg, deployedFiles, logger, dryRun, useOptimization); err != nil {
+	if err := applyPackageConfigurations(cfg, deployedFiles, logger, dryRun, useOptimization, configDir); err != nil {
 		return fmt.Errorf("failed to apply package configurations: %w", err)
 	}
 
@@ -178,6 +236,21 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Apply backup policy if configured (only in non-dry-run mode)
+	if !dryRun && len(deployedFiles) > 0 {
+		// Load current state to get all managed files for policy enforcement
+		stateManager := pkg.NewStateManager(logger)
+		state, err := stateManager.LoadState()
+		if err == nil && cfg.BackupPolicy.AutoCleanup {
+			logger.Debug("Applying backup policy")
+			fileManager := pkg.NewFileManager(logger, dryRun, configDir)
+			if err := fileManager.ApplyBackupPolicy(state.Files, cfg.BackupPolicy); err != nil {
+				logger.Warn("Backup policy enforcement failed", "error", err)
+				// Don't fail the entire operation for backup policy issues
+			}
+		}
+	}
+
 	if dryRun {
 		logger.Info("✓ Dry run completed - no actual changes were made")
 	} else {
@@ -185,6 +258,15 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// enableInteractiveModeOnFiles enables interactive features on all files
+func enableInteractiveModeOnFiles(files map[string]config.File) map[string]config.File {
+	for name, file := range files {
+		file.Interactive = true
+		files[name] = file
+	}
+	return files
 }
 
 // findConfigFile searches for a config file in standard locations
@@ -216,7 +298,7 @@ func findConfigFile() (string, error) {
 }
 
 // applyPackageConfigurations handles package management for all supported package managers
-func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedFile, logger *log.Logger, dryRun bool, useOptimization bool) error {
+func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedFile, logger *log.Logger, dryRun bool, useOptimization bool, configDir string) error {
 	// Initialize state manager for package removal tracking
 	stateManager := pkg.NewStateManager(logger)
 	
