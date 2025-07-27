@@ -1,0 +1,53 @@
+{
+  "severity": "medium",
+  "confidence": "medium",
+  "exclude": {
+    "G104": false,
+    "G204": false,
+    "G301": false,
+    "G302": false,
+    "G304": false,
+    "G306": false
+  },
+  "include": [
+    "G101",
+    "G102", 
+    "G103",
+    "G104",
+    "G106",
+    "G107",
+    "G108",
+    "G109",
+    "G110",
+    "G201",
+    "G202",
+    "G203",
+    "G204",
+    "G301",
+    "G302",
+    "G303",
+    "G304",
+    "G305",
+    "G306",
+    "G307",
+    "G401",
+    "G402",
+    "G403",
+    "G404",
+    "G501",
+    "G502",
+    "G503",
+    "G504",
+    "G505",
+    "G601"
+  ],
+  "exclude-generated": true,
+  "exclude-dirs": [
+    "vendor",
+    "examples",
+    "testdata"
+  ],
+  "tests": true,
+  "fmt": "sarif",
+  "stdout": false
+}

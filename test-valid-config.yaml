@@ -1,0 +1,22 @@
+version: "1.0"
+
+packages:
+  apt:
+    - vim
+    - git
+  flatpak:
+    - org.mozilla.Firefox
+  snap:
+    - code:
+        flags: ["--classic"]
+
+files:
+  vimrc:
+    source: "test-config.yaml"  # Use existing file for testing
+    destination: "~/.vimrc"
+    mode: "644"
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita'"
+    "/org/gnome/desktop/interface/color-scheme": "'prefer-dark'"
