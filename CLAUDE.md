@@ -30,11 +30,19 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - Professional CLI with charmbracelet/fang integration
 - Comprehensive test coverage (170+ tests)
 
+**✅ Recently Implemented:**
+
+- Init command for tool installation verification
+- Interactive conflict resolution system
+- File diff preview before replacement
+- Advanced permission handling with interactive prompts
+- Advanced include system with glob patterns and conditional includes
+- System detection for OS, hostname, and environment-based configuration
+
 **📋 Planned Features:**
 
-- Init command for tool installation
-- State caching and optimization
 - Backup restoration system
+- Enhanced interactive features
 
 ### Key Technical Differentiators
 
@@ -63,6 +71,7 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - **Proper error handling** with meaningful stdout/stderr from external tools
 - **Favor existing patterns** for consistency, suggest improvements when beneficial
 - **Update documentation** when requested: README (end-user POV) + CLAUDE.md (architecture)
+- **Always consider the relationship between schema, caching, and actions**
 
 ### Development Workflow
 
@@ -143,13 +152,16 @@ repositories:
 ```yaml
 files:
   filename:
-    source: "path/to/source"      # Required: source file path
-    destination: "/target/path"   # Required: where to place the file
-    owner: "user"                 # Optional: file owner (preserves if omitted)
-    group: "group"                # Optional: file group (preserves if omitted)
-    mode: "644"                   # Optional: file permissions (preserves if omitted)
-    backup: true                  # Optional: backup existing file before replacing
-    copy: true                    # Optional: copy file instead of symlinking (default: false)
+    source: "path/to/source"         # Required: source file path
+    destination: "/target/path"      # Required: where to place the file
+    owner: "user"                    # Optional: file owner (preserves if omitted)
+    group: "group"                   # Optional: file group (preserves if omitted)
+    mode: "644"                      # Optional: file permissions (preserves if omitted)
+    backup: true                     # Optional: backup existing file before replacing
+    copy: true                       # Optional: copy file instead of symlinking (default: false)
+    interactive: true                # Optional: enable interactive conflict resolution
+    prompt_permissions: true         # Optional: prompt for permission changes
+    prompt_ownership: true           # Optional: prompt for ownership changes
 ```
 
 ### Command Interface (CLI Design)
@@ -165,6 +177,7 @@ configr [global-flags] <command> [command-flags] [arguments]
 - `configr validate [file]` - Validate configuration without applying changes
 - `configr apply [file]` - Apply configuration changes to system
 - `configr apply --dry-run` - Preview changes without applying
+- `configr apply --interactive` - Enable interactive prompts for conflicts and permissions
 - `configr apply --remove-packages=false` - Skip package removal operations
 - `configr apply --optimize=false` - Disable caching and optimization
 - `configr cache stats` - Show cache usage statistics
@@ -357,12 +370,14 @@ return config.GetDefaultFlags("apt")
 - **Error Handling**: Clear feedback with specific installation requirements
 
 **APT Repository Features:**
+
 - PPA format validation (`user/repo`)
 - Custom repository URI validation (must start with `deb`/`deb-src`)
 - GPG key validation (HTTPS URLs or hex key IDs)
 - Automatic key installation before repository addition
 
 **Flatpak Repository Features:**
+
 - Repository URL validation (HTTPS enforcement for security)
 - Remote name validation (alphanumeric with hyphens/underscores)
 - User vs system installation control
@@ -387,6 +402,7 @@ return config.GetDefaultFlags("apt")
 - **Error Handling**: Clear feedback with specific dconf command requirements
 
 **DConf Features:**
+
 - Settings path validation (must start with `/`, no double slashes)
 - Value format validation with helpful warnings for unquoted strings
 - Support for all dconf data types (strings, booleans, integers, arrays)
@@ -394,6 +410,7 @@ return config.GetDefaultFlags("apt")
 - Integration with existing configuration validation system
 
 **Advanced Operations:**
+
 - `GetSetting()`: Retrieve current values from dconf database
 - `ResetSetting()`: Reset settings to application defaults
 - `ListSettings()`: List all settings under a given path
@@ -401,6 +418,7 @@ return config.GetDefaultFlags("apt")
 - `ValidateSettings()`: Pre-validate settings before application
 
 **Application Coverage:**
+
 - GNOME Desktop Environment (themes, wallpapers, behavior)
 - GNOME Applications (Terminal, Nautilus, Text Editor, etc.)
 - GTK Applications (any app using GSettings/dconf)
@@ -425,6 +443,7 @@ return config.GetDefaultFlags("apt")
 - **Dry-run Support**: Preview changes without modifying system state
 
 **Flatpak Features:**
+
 - Application ID validation with reverse domain notation enforcement
 - User vs system installation scope control
 - Smart package grouping by resolved flags
@@ -432,6 +451,7 @@ return config.GetDefaultFlags("apt")
 - Integration with existing three-tier flag system
 
 **Advanced Operations:**
+
 - `InstallPackages()`: Install applications with flag resolution
 - `UninstallPackage()`: Remove applications with custom flags
 - `ListInstalledPackages()`: Enumerate installed applications
@@ -457,6 +477,7 @@ return config.GetDefaultFlags("apt")
 - **Dry-run Support**: Preview changes without modifying system state
 
 **Snap Features:**
+
 - Package name validation with Snap naming convention enforcement
 - Classic confinement support for desktop applications
 - Individual package installation (Snap limitation)
@@ -464,6 +485,7 @@ return config.GetDefaultFlags("apt")
 - Integration with existing three-tier flag system
 
 **Advanced Operations:**
+
 - `InstallPackages()`: Install packages with flag resolution and individual handling
 - `UninstallPackage()`: Remove packages with custom flags
 - `ListInstalledPackages()`: Enumerate installed packages
@@ -494,6 +516,7 @@ return config.GetDefaultFlags("apt")
 - **Error handling**: Graceful degradation if state tracking fails
 
 **Package and File Removal Features:**
+
 - State file format with version tracking and timestamps
 - Removal detection by comparing previous and current package/file lists
 - Batch removal operations for APT packages
@@ -502,6 +525,7 @@ return config.GetDefaultFlags("apt")
 - Integration with existing three-tier flag system for removal operations
 
 **Advanced Operations:**
+
 - `LoadState()`: Read current package and file state from disk
 - `SaveState()`: Persist package and file state with timestamps
 - `UpdateState()`: Update state after successful configuration application
@@ -510,6 +534,7 @@ return config.GetDefaultFlags("apt")
 - State file location: `~/.config/configr/state.json`
 
 **Safety and Error Handling:**
+
 - Only removes packages that are actually installed on the system
 - Only removes files that match expected type (symlink vs copy)
 - Skips removal of files that appear to be modified by users
@@ -517,6 +542,58 @@ return config.GetDefaultFlags("apt")
 - Graceful handling of missing or corrupted state files
 - Continues with installation/deployment even if removal tracking fails
 - Configurable via command-line flag for safety
+
+#### Interactive Features System
+
+**Core Components:**
+
+- **InteractiveManager (`internal/pkg/interactive.go`)** - Central orchestrator for all interactive features
+- **Conflict resolution prompts**: User-friendly y/n prompts for file conflicts
+- **File diff preview**: Shows differences between source and destination files before replacement
+- **Advanced permission handling**: Interactive prompts for file permissions and ownership
+- **Terminal detection**: Automatically detects if running in interactive mode
+
+**Key Implementation Details:**
+
+- **Conflict Resolution**: Prompts users when files already exist at destination paths
+- **Diff Preview**: Uses system `diff` command with fallback to built-in diff implementation
+- **Permission Prompts**: Interactive validation and modification of file permissions (octal format)
+- **Ownership Prompts**: Interactive confirmation and modification of file ownership
+- **Terminal Safety**: Only activates in interactive terminal environments
+
+**Interactive Features:**
+
+- File conflict resolution with options: overwrite, backup, skip, view diff, quit
+- Real-time file diff preview using unified diff format
+- Permission validation with octal format checking (644, 755, etc.)
+- Ownership prompting with username/UID and groupname/GID support
+- Preview summaries showing all changes before application
+- Graceful degradation when not in interactive mode
+
+**Advanced Operations:**
+
+- `PromptForConflictResolution()`: Handle file conflicts with user input
+- `ShowFileDiff()`: Display differences between files using system or built-in diff
+- `PromptYesNo()`: Generic yes/no prompting with default value support
+- `PromptForPermissions()`: Interactive permission setting with validation
+- `PromptForOwnership()`: Interactive ownership configuration
+- `ShowPreviewSummary()`: Comprehensive preview of all planned changes
+- `IsInteractiveMode()`: Terminal detection for interactive capabilities
+
+**Configuration Integration:**
+
+- **Per-file control**: `interactive: true` enables prompts for specific files
+- **Global flag**: `--interactive` enables interactive mode for all file operations
+- **Granular prompts**: `prompt_permissions` and `prompt_ownership` for specific interactions
+- **Backward compatibility**: All interactive features are opt-in and don't affect existing configurations
+
+**Safety and Error Handling:**
+
+- **Terminal detection**: Only activates in proper terminal environments
+- **Input validation**: Validates octal permissions and ownership formats
+- **Graceful fallback**: Continues with standard behavior if interactive features fail
+- **User control**: Multiple exit strategies (skip, quit) to prevent unwanted changes
+- **Error isolation**: Interactive failures don't prevent core functionality
 
 #### State Caching & Optimization System
 
@@ -537,6 +614,7 @@ return config.GetDefaultFlags("apt")
 - **Smart loading**: Falls back to standard loading if cache is invalid or missing
 
 **Caching Features:**
+
 - Multi-level caching (config, packages, files, system state)
 - Automatic cache expiration and validation
 - File modification time tracking for cache invalidation
@@ -545,6 +623,7 @@ return config.GetDefaultFlags("apt")
 - Cache statistics and management commands
 
 **Advanced Operations:**
+
 - `LoadCachedConfig()`: Load configuration from cache with validation
 - `SaveCachedConfig()`: Store parsed configuration with metadata
 - `LoadSystemStateCache()`: Load cached system state information
@@ -554,6 +633,7 @@ return config.GetDefaultFlags("apt")
 - Cache location: `~/.cache/configr/`
 
 **Performance Benefits:**
+
 - **Configuration loading**: 5-10x faster for large configs with includes
 - **Package checking**: Skip installation status queries for recently cached packages
 - **File deployment**: Avoid re-checking file states that haven't changed
@@ -561,12 +641,14 @@ return config.GetDefaultFlags("apt")
 - **Overall speedup**: 2-5x faster repeated runs depending on configuration size
 
 **Cache Management:**
+
 - **Enable/Disable**: `--optimize=true/false` flag (enabled by default)
 - **Cache statistics**: `configr cache stats` shows usage and performance data
 - **Cache clearing**: `configr cache clear` removes all cached data
 - **Cache information**: `configr cache info` shows system and configuration details
 
 **Safety and Error Handling:**
+
 - **Graceful degradation**: Falls back to standard mode if caching fails
 - **Cache validation**: Ensures cached data is current and valid
 - **Modification tracking**: Detects file changes and invalidates stale cache
@@ -650,38 +732,117 @@ configr/
 - **Validation Tests**: Comprehensive schema and error condition testing
 - **Cross-platform Considerations**: Path handling and command availability testing
 
-### Include System Implementation
+### Advanced Include System
+
+**Core Components:**
+
+- **AdvancedLoader (`internal/config/advanced_loader.go`)** - Central orchestrator for advanced include processing
+- **Glob pattern support**: Include multiple files using wildcards (*.yaml, packages/*.yaml)
+- **Conditional includes**: System-aware configuration loading based on OS, hostname, environment
+- **Enhanced validation**: Comprehensive validation with circular dependency prevention
+- **Backward compatibility**: Full support for existing simple include syntax
+
+**Key Implementation Details:**
+
+- **Glob Pattern Resolution**: Uses `filepath.Glob()` for reliable pattern matching with YAML file filtering
+- **System Detection**: Automatic detection of OS, hostname, and environment variables
+- **Condition Evaluation**: Multiple condition types with configurable operators
+- **Optional Includes**: Graceful handling of missing optional configuration files
+- **Path Safety**: Validation against unsafe path traversal patterns
+
+**Advanced Include Features:**
+
+```yaml
+# Simple includes (backward compatibility)
+includes:
+  - "common/base.yaml"
+  - "packages/"
+
+# Advanced includes with conditions and patterns
+advanced_includes:
+  # Glob patterns
+  - glob: "packages/*.yaml"
+    description: "All package configurations"
+    optional: false
+  
+  # Conditional includes
+  - path: "os-specific/linux.yaml"
+    optional: true
+    conditions:
+      - type: "os"
+        value: "linux"
+        operator: "equals"
+  
+  # Environment-based includes
+  - path: "environments/development.yaml"
+    optional: true
+    conditions:
+      - type: "env"
+        value: "NODE_ENV=development"
+  
+  # Multiple conditions (all must be true)
+  - glob: "hosts/*.yaml"
+    optional: true
+    conditions:
+      - type: "hostname"
+        value: "workstation"
+        operator: "contains"
+      - type: "file_exists"
+        value: "/etc/workstation-config"
+```
+
+**Condition Types:**
+
+- **`os`**: Operating system detection (linux, darwin, windows)
+- **`hostname`**: System hostname matching with operators
+- **`env`**: Environment variable existence and value checking
+- **`file_exists`**: File system existence checks
+- **`dir_exists`**: Directory existence validation
+
+**Operators:**
+
+- **`equals`**: Exact string matching (default)
+- **`contains`**: Substring matching
+- **`matches`**: Regular expression matching
+- **`not_equals`**: Negated exact matching
+- **`not_contains`**: Negated substring matching
+
+**Advanced Operations:**
+
+- `LoadConfigurationAdvanced()`: Main loading entry point with full feature support
+- `resolveGlobPattern()`: Pattern matching with YAML file filtering
+- `evaluateConditions()`: Multi-condition evaluation with AND logic
+- `ValidateIncludeSpec()`: Comprehensive validation of include specifications
+- `GetSystemInfo()`: System information for debugging conditional includes
 
 **Path Resolution Rules:**
 
-1. **Explicit file**: `packages.yaml` → loads `packages.yaml`
-2. **Directory with slash**: `packages/` → loads `packages/default.yaml`
-3. **Subdirectory with slash**: `packages/apt/` → loads `packages/apt/default.yaml`
-4. **Directory without slash**: `packages/apt` → loads `packages/apt/default.yaml` (backward compatibility)
-5. **Auto-extension**: `packages` → tries `packages.yaml` if no directory exists
+1. **Simple includes**: `packages.yaml` → loads `packages.yaml`
+2. **Directory includes**: `packages/` → loads `packages/default.yaml`
+3. **Glob patterns**: `packages/*.yaml` → loads all matching YAML files
+4. **Conditional paths**: Evaluated only when conditions are met
+5. **Optional includes**: Skip gracefully when files don't exist
 
-**Merging Strategy:**
+**Validation and Safety:**
 
-- **Package arrays**: Appended together with duplicates removed
-- **Files and dconf**: Later includes override earlier ones for same keys
-- **Circular includes**: Detected and prevented with clear error messages
+- **Circular dependency detection**: Prevents infinite include loops
+- **Path traversal protection**: Validates against `../` patterns
+- **Glob syntax validation**: Tests pattern validity before evaluation
+- **Condition validation**: Ensures valid condition types and operators
+- **Optional include handling**: Graceful degradation for missing files
 
-**Example Directory Structure:**
+**Integration:**
 
-```
-configr.yaml
-packages.yaml
-packages/
-  default.yaml       # General packages
-  apt/
-    default.yaml     # APT-specific packages
-  flatpak/
-    default.yaml     # Flatpak packages
-dotfiles/
-  default.yaml       # General dotfiles
-  vim.yaml          # Vim-specific config
-system/
-  default.yaml       # System configurations
-```
+- **Optimized loading**: Seamless integration with existing cache system
+- **Validation system**: Enhanced validation with position-aware error reporting
+- **Backward compatibility**: Existing configurations continue to work unchanged
+- **Error reporting**: Rust-style error messages with actionable suggestions
 
-This implementation fully supports the file management specification while providing a robust, user-friendly experience that aligns with configr's goals of exceptional UX and system administrator-friendly operation.
+**Performance Considerations:**
+
+- **Lazy evaluation**: Conditions evaluated only when needed
+- **Cached system info**: OS and hostname cached per loader instance
+- **Efficient glob matching**: Uses Go's optimized filepath.Glob
+- **Path deduplication**: Prevents loading same file multiple times
+
+This advanced include system provides powerful configuration organization capabilities while maintaining configr's commitment to exceptional UX and system administrator-friendly operation.
