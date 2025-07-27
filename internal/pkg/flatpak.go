@@ -345,3 +345,79 @@ func (fm *FlatpakManager) validatePackageName(packageName string) error {
 
 	return nil
 }
+
+// SearchPackages searches for Flatpak applications using flatpak search
+func (fm *FlatpakManager) SearchPackages(searchTerm string) ([]string, error) {
+	if searchTerm == "" {
+		return nil, fmt.Errorf("search term cannot be empty")
+	}
+
+	if fm.dryRun {
+		fm.logger.Info("DRY RUN: Would search for packages", "term", searchTerm)
+		return []string{}, nil
+	}
+
+	// Check if flatpak is available
+	if err := fm.checkFlatpakAvailable(); err != nil {
+		return nil, fmt.Errorf("flatpak not available: %w", err)
+	}
+
+	args := []string{"flatpak", "search", searchTerm}
+	cmd := exec.Command(args[0], args[1:]...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		fm.logger.Error("Failed to search Flatpak packages", "search", searchTerm, "error", err, "output", string(output))
+		return nil, fmt.Errorf("flatpak search failed: %w", err)
+	}
+
+	var packages []string
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Name") || strings.HasPrefix(line, "-----") {
+			continue
+		}
+		
+		// Flatpak search output is tabular: Name Description Application ID Version Branch Remote
+		fields := strings.Fields(line)
+		if len(fields) >= 3 {
+			// Application ID is usually the third field
+			appID := fields[2]
+			if strings.Contains(appID, ".") { // Basic check for reverse domain notation
+				packages = append(packages, appID)
+			}
+		}
+	}
+
+	fm.logger.Debug("Found Flatpak packages", "search", searchTerm, "count", len(packages))
+	return packages, nil
+}
+
+// GetPackageInfo returns detailed information about a Flatpak application
+func (fm *FlatpakManager) GetPackageInfo(packageName string) (string, error) {
+	if packageName == "" {
+		return "", fmt.Errorf("package name cannot be empty")
+	}
+
+	if fm.dryRun {
+		fm.logger.Info("DRY RUN: Would get package info", "package", packageName)
+		return "", nil
+	}
+
+	// Check if flatpak is available
+	if err := fm.checkFlatpakAvailable(); err != nil {
+		return "", fmt.Errorf("flatpak not available: %w", err)
+	}
+
+	args := []string{"flatpak", "info", packageName}
+	cmd := exec.Command(args[0], args[1:]...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		fm.logger.Error("Failed to get Flatpak package info", "package", packageName, "error", err, "output", string(output))
+		return "", fmt.Errorf("flatpak info failed for package %s: %w", packageName, err)
+	}
+
+	return string(output), nil
+}

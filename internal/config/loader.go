@@ -50,9 +50,9 @@ func loadConfigRecursive(configPath string, visited map[string]bool) (*Config, e
 		baseDir := filepath.Dir(configPath)
 		
 		for _, includePath := range config.Includes {
-			resolvedPath, err := resolveIncludePath(baseDir, includePath)
+			resolvedPath, err := resolveIncludePath(baseDir, includePath.Path)
 			if err != nil {
-				return nil, fmt.Errorf("failed to resolve include path %s: %w", includePath, err)
+				return nil, fmt.Errorf("failed to resolve include path %s: %w", includePath.Path, err)
 			}
 
 			includedConfig, err := loadConfigRecursive(resolvedPath, visited)

@@ -414,3 +414,25 @@ func (sm *SnapManager) validatePackageName(packageName string) error {
 
 	return nil
 }
+
+// SearchPackages is an alias for FindPackage to maintain consistency with other managers
+func (sm *SnapManager) SearchPackages(searchTerm string) ([]string, error) {
+	return sm.FindPackage(searchTerm)
+}
+
+// GetPackageInfo is an alias for InfoPackage to maintain consistency with other managers
+func (sm *SnapManager) GetPackageInfo(packageName string) (string, error) {
+	return sm.InfoPackage(packageName)
+}
+
+// UpgradePackages is an alias for RefreshPackages to maintain consistency with other managers
+func (sm *SnapManager) UpgradePackages(packageNames []string, flags []string) error {
+	if len(packageNames) == 0 {
+		// Refresh all packages
+		return sm.RefreshPackages(flags)
+	}
+	
+	// Snap doesn't support upgrading specific packages, so refresh all
+	sm.logger.Info("Snap doesn't support upgrading specific packages, refreshing all packages", "requested", packageNames)
+	return sm.RefreshPackages(flags)
+}

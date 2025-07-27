@@ -317,3 +317,263 @@ func (am *AptManager) RemovePackages(packagesToRemove []string) error {
 
 	return nil
 }
+
+// SearchPackages searches for APT packages using apt search
+func (am *AptManager) SearchPackages(searchTerm string) ([]string, error) {
+	if searchTerm == "" {
+		return nil, fmt.Errorf("search term cannot be empty")
+	}
+
+	if am.dryRun {
+		am.logger.Info("DRY RUN: Would search for packages", "term", searchTerm)
+		return []string{}, nil
+	}
+
+	// Check if apt is available
+	if err := am.checkAptAvailable(); err != nil {
+		return nil, fmt.Errorf("apt not available: %w", err)
+	}
+
+	args := []string{"search", searchTerm}
+	cmd := exec.Command("apt", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return nil, fmt.Errorf("apt search failed: %w", err)
+	}
+
+	var packages []string
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "WARNING:") || strings.HasPrefix(line, "NOTE:") {
+			continue
+		}
+		
+		// APT search output format: "packagename/repository - description"
+		if strings.Contains(line, "/") && strings.Contains(line, " - ") {
+			parts := strings.Split(line, "/")
+			if len(parts) > 0 {
+				packageName := strings.TrimSpace(parts[0])
+				if packageName != "" {
+					packages = append(packages, packageName)
+				}
+			}
+		}
+	}
+
+	am.logger.Debug("Found APT packages", "search", searchTerm, "count", len(packages))
+	return packages, nil
+}
+
+// GetPackageInfo returns detailed information about an APT package
+func (am *AptManager) GetPackageInfo(packageName string) (string, error) {
+	if packageName == "" {
+		return "", fmt.Errorf("package name cannot be empty")
+	}
+
+	if am.dryRun {
+		am.logger.Info("DRY RUN: Would get package info", "package", packageName)
+		return "", nil
+	}
+
+	// Check if apt is available
+	if err := am.checkAptAvailable(); err != nil {
+		return "", fmt.Errorf("apt not available: %w", err)
+	}
+
+	args := []string{"show", packageName}
+	cmd := exec.Command("apt", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return "", fmt.Errorf("apt show failed for package %s: %w", packageName, err)
+	}
+
+	return string(output), nil
+}
+
+// ListUpgradablePackages returns a list of packages that can be upgraded
+func (am *AptManager) ListUpgradablePackages() ([]string, error) {
+	if am.dryRun {
+		am.logger.Info("DRY RUN: Would list upgradable packages")
+		return []string{}, nil
+	}
+
+	// Check if apt is available
+	if err := am.checkAptAvailable(); err != nil {
+		return nil, fmt.Errorf("apt not available: %w", err)
+	}
+
+	args := []string{"list", "--upgradable"}
+	cmd := exec.Command("apt", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return nil, fmt.Errorf("apt list --upgradable failed: %w", err)
+	}
+
+	var packages []string
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "WARNING:") || strings.HasPrefix(line, "Listing...") {
+			continue
+		}
+		
+		// APT list output format: "packagename/repository version [upgradable from: oldversion]"
+		if strings.Contains(line, "/") && strings.Contains(line, "[upgradable from:") {
+			parts := strings.Split(line, "/")
+			if len(parts) > 0 {
+				packageName := strings.TrimSpace(parts[0])
+				if packageName != "" {
+					packages = append(packages, packageName)
+				}
+			}
+		}
+	}
+
+	am.logger.Debug("Found upgradable APT packages", "count", len(packages))
+	return packages, nil
+}
+
+// UpgradePackages upgrades all upgradable packages or specific packages
+func (am *AptManager) UpgradePackages(packageNames []string, flags []string) error {
+	// Check if apt is available
+	if err := am.checkAptAvailable(); err != nil {
+		return fmt.Errorf("apt not available: %w", err)
+	}
+
+	var args []string
+	if len(packageNames) == 0 {
+		// Upgrade all packages
+		args = append([]string{"upgrade"}, flags...)
+		am.logger.Info("Upgrading all APT packages", "flags", flags)
+	} else {
+		// Upgrade specific packages
+		args = append([]string{"install", "--only-upgrade"}, flags...)
+		args = append(args, packageNames...)
+		am.logger.Info("Upgrading specific APT packages", "packages", packageNames, "flags", flags)
+	}
+
+	if am.dryRun {
+		am.logger.Debug("DRY RUN: Would run apt command", "args", args)
+		return nil
+	}
+
+	cmd := exec.Command("apt", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to upgrade packages: %w", err)
+	}
+
+	if len(packageNames) == 0 {
+		config.Success("All APT packages upgraded successfully")
+	} else {
+		for _, pkg := range packageNames {
+			config.Success("Upgraded package: %s", pkg)
+		}
+	}
+
+	return nil
+}
+
+// GetPackageDependencies returns the dependencies of an APT package
+func (am *AptManager) GetPackageDependencies(packageName string) ([]string, error) {
+	if packageName == "" {
+		return nil, fmt.Errorf("package name cannot be empty")
+	}
+
+	if am.dryRun {
+		am.logger.Info("DRY RUN: Would get package dependencies", "package", packageName)
+		return []string{}, nil
+	}
+
+	// Check if apt is available
+	if err := am.checkAptAvailable(); err != nil {
+		return nil, fmt.Errorf("apt not available: %w", err)
+	}
+
+	args := []string{"depends", packageName}
+	cmd := exec.Command("apt", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return nil, fmt.Errorf("apt depends failed for package %s: %w", packageName, err)
+	}
+
+	var dependencies []string
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, packageName+":") {
+			continue
+		}
+		
+		// APT depends output format: "  Depends: packagename"
+		if strings.HasPrefix(line, "Depends:") || strings.HasPrefix(line, "  ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				// Remove "Depends:" prefix and extract package name
+				depName := parts[len(parts)-1]
+				// Clean up package name (remove version constraints)
+				if idx := strings.Index(depName, "("); idx != -1 {
+					depName = depName[:idx]
+				}
+				if depName != "" && depName != packageName {
+					dependencies = append(dependencies, depName)
+				}
+			}
+		}
+	}
+
+	am.logger.Debug("Found package dependencies", "package", packageName, "count", len(dependencies))
+	return dependencies, nil
+}
+
+// SimulateInstall simulates package installation to show what would be installed
+func (am *AptManager) SimulateInstall(packageNames []string, flags []string) ([]string, error) {
+	if len(packageNames) == 0 {
+		return nil, fmt.Errorf("no packages specified")
+	}
+
+	if am.dryRun {
+		am.logger.Info("DRY RUN: Would simulate package installation", "packages", packageNames)
+		return []string{}, nil
+	}
+
+	// Check if apt is available
+	if err := am.checkAptAvailable(); err != nil {
+		return nil, fmt.Errorf("apt not available: %w", err)
+	}
+
+	// Build apt install command with simulation flag
+	args := append([]string{"install", "--simulate"}, flags...)
+	args = append(args, packageNames...)
+
+	cmd := exec.Command("apt", args...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return nil, fmt.Errorf("apt simulate failed: %w", err)
+	}
+
+	var willInstall []string
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Look for "Inst" lines which show what would be installed
+		if strings.HasPrefix(line, "Inst ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				packageName := parts[1]
+				willInstall = append(willInstall, packageName)
+			}
+		}
+	}
+
+	am.logger.Debug("Simulated package installation", "packages", packageNames, "will_install", len(willInstall))
+	return willInstall, nil
+}

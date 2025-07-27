@@ -124,7 +124,7 @@ func TestFileManager_DeployFiles_DryRun(t *testing.T) {
 	}
 
 	// Deploy files in dry-run mode
-	err = fm.DeployFiles(files)
+	_, err = fm.DeployFiles(files)
 	if err != nil {
 		t.Fatalf("unexpected error in dry-run: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestFileManager_DeployFiles_RealDeploy(t *testing.T) {
 	}
 
 	// Deploy files
-	err = fm.DeployFiles(files)
+	_, err = fm.DeployFiles(files)
 	if err != nil {
 		t.Fatalf("unexpected error during deployment: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestFileManager_BackupExistingFile(t *testing.T) {
 	}
 
 	// Deploy files
-	err = fm.DeployFiles(files)
+	_, err = fm.DeployFiles(files)
 	if err != nil {
 		t.Fatalf("unexpected error during deployment: %v", err)
 	}
@@ -318,8 +318,22 @@ func TestFileManager_handleExistingFile_NoBackup(t *testing.T) {
 		t.Fatalf("failed to create existing file: %v", err)
 	}
 
+	// Create source file for the test
+	sourceFile := filepath.Join(tempDir, "source.txt")
+	err = os.WriteFile(sourceFile, []byte("new content"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+
+	// Create file config without backup
+	fileConfig := config.File{
+		Source:      sourceFile,
+		Destination: existingFile,
+		Backup:      false,
+	}
+
 	// Handle existing file without backup
-	err = fm.handleExistingFile(existingFile, false)
+	_, err = fm.handleExistingFile("test-file", existingFile, sourceFile, fileConfig)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -399,7 +413,7 @@ func TestFileManager_DeployFiles_CopyMode(t *testing.T) {
 	}
 
 	// Deploy files
-	err = fm.DeployFiles(files)
+	_, err = fm.DeployFiles(files)
 	if err != nil {
 		t.Fatalf("unexpected error during deployment: %v", err)
 	}
@@ -455,7 +469,7 @@ func TestFileManager_DeployFiles_CopyMode_DryRun(t *testing.T) {
 	}
 
 	// Deploy files in dry-run mode
-	err = fm.DeployFiles(files)
+	_, err = fm.DeployFiles(files)
 	if err != nil {
 		t.Fatalf("unexpected error in dry-run: %v", err)
 	}
@@ -495,7 +509,7 @@ func TestFileManager_CopyMode_vs_SymlinkMode(t *testing.T) {
 		},
 	}
 
-	err = fm.DeployFiles(symlinkFiles)
+	_, err = fm.DeployFiles(symlinkFiles)
 	if err != nil {
 		t.Fatalf("failed to deploy symlink file: %v", err)
 	}
@@ -510,7 +524,7 @@ func TestFileManager_CopyMode_vs_SymlinkMode(t *testing.T) {
 		},
 	}
 
-	err = fm.DeployFiles(copyFiles)
+	_, err = fm.DeployFiles(copyFiles)
 	if err != nil {
 		t.Fatalf("failed to deploy copy file: %v", err)
 	}

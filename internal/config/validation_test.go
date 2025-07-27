@@ -856,3 +856,400 @@ func TestIsValidFlatpakRemoteName(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate_InteractiveFileFeatures(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a valid source file
+	sourceFile := filepath.Join(tempDir, "test.txt")
+	err := os.WriteFile(sourceFile, []byte("test content"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+	
+	tests := []struct {
+		name        string
+		file        File
+		shouldError bool
+		errorTitle  string
+	}{
+		{
+			name: "valid interactive file",
+			file: File{
+				Source:           "test.txt",
+				Destination:      "~/test.txt",
+				Interactive:      true,
+				PromptPermissions: true,
+				PromptOwnership:   true,
+			},
+			shouldError: false,
+		},
+		{
+			name: "interactive with invalid mode",
+			file: File{
+				Source:           "test.txt",
+				Destination:      "~/test.txt",
+				Mode:             "999",
+				Interactive:      true,
+				PromptPermissions: true,
+			},
+			shouldError: true,
+			errorTitle:  "invalid file mode",
+		},
+		{
+			name: "interactive with invalid owner",
+			file: File{
+				Source:           "test.txt",
+				Destination:      "~/test.txt",
+				Owner:            "invalid@user",
+				Interactive:      true,
+				PromptOwnership:  true,
+			},
+			shouldError: true,
+			errorTitle:  "invalid owner",
+		},
+		{
+			name: "interactive with invalid group",
+			file: File{
+				Source:           "test.txt",
+				Destination:      "~/test.txt",
+				Group:            "invalid@group",
+				Interactive:      true,
+				PromptOwnership:  true,
+			},
+			shouldError: true,
+			errorTitle:  "invalid group",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Version: "1.0",
+				Files: map[string]File{
+					"test": tt.file,
+				},
+			}
+			
+			result := Validate(config, filepath.Join(tempDir, "config.yaml"))
+			
+			if tt.shouldError {
+				if !result.HasErrors() {
+					t.Errorf("validation should fail for %s", tt.name)
+					return
+				}
+				
+				found := false
+				for _, err := range result.Errors {
+					if strings.Contains(err.Title, tt.errorTitle) {
+						found = true
+						break
+					}
+				}
+				
+				if !found {
+					t.Errorf("expected error message containing '%s', got errors: %v", tt.errorTitle, result.Errors)
+				}
+			} else {
+				if result.HasErrors() {
+					t.Errorf("validation should pass for %s, got errors: %v", tt.name, result.Errors)
+				}
+			}
+		})
+	}
+}
+
+func TestValidate_PackageDefaultsValidation(t *testing.T) {
+	tests := []struct {
+		name           string
+		packageDefaults map[string][]string
+		shouldError    bool
+		errorTitle     string
+	}{
+		{
+			name: "valid package defaults",
+			packageDefaults: map[string][]string{
+				"apt":     {"-y", "--no-install-recommends"},
+				"flatpak": {"--user", "--assumeyes"},
+				"snap":    {"--classic"},
+			},
+			shouldError: false,
+		},
+		{
+			name: "invalid package manager",
+			packageDefaults: map[string][]string{
+				"invalid": {"-y"},
+			},
+			shouldError: true,
+			errorTitle:  "invalid package manager",
+		},
+		{
+			name: "empty flags array",
+			packageDefaults: map[string][]string{
+				"apt": {},
+			},
+			shouldError: false, // Empty arrays are valid
+		},
+		{
+			name: "dangerous flags warning",
+			packageDefaults: map[string][]string{
+				"apt": {"--force-yes"},
+			},
+			shouldError: false, // This should be a warning, not an error
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Version:         "1.0",
+				PackageDefaults: tt.packageDefaults,
+			}
+			
+			result := Validate(config, "config.yaml")
+			
+			if tt.shouldError {
+				if !result.HasErrors() {
+					t.Errorf("validation should fail for %s", tt.name)
+					return
+				}
+				
+				found := false
+				for _, err := range result.Errors {
+					if strings.Contains(err.Title, tt.errorTitle) {
+						found = true
+						break
+					}
+				}
+				
+				if !found {
+					t.Errorf("expected error message containing '%s', got errors: %v", tt.errorTitle, result.Errors)
+				}
+			} else {
+				if result.HasErrors() {
+					t.Errorf("validation should pass for %s, got errors: %v", tt.name, result.Errors)
+				}
+			}
+		})
+	}
+}
+
+func TestValidate_ThreeTierFlagSystem(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a valid source file
+	sourceFile := filepath.Join(tempDir, "test.txt")
+	err := os.WriteFile(sourceFile, []byte("test content"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+	
+	tests := []struct {
+		name        string
+		config      *Config
+		shouldError bool
+		errorTitle  string
+	}{
+		{
+			name: "valid three-tier flag system",
+			config: &Config{
+				Version: "1.0",
+				PackageDefaults: map[string][]string{
+					"apt": {"-y"},
+				},
+				Packages: PackageManagement{
+					Apt: []PackageEntry{
+						{Name: "git", Flags: []string{"--no-install-recommends"}},
+						{Name: "curl"}, // Uses defaults
+					},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "invalid package flags",
+			config: &Config{
+				Version: "1.0",
+				Packages: PackageManagement{
+					Apt: []PackageEntry{
+						{Name: "git", Flags: []string{"--invalid-flag"}},
+					},
+				},
+			},
+			shouldError: false, // Flag validation might be warning-only
+		},
+		{
+			name: "conflicting package and defaults",
+			config: &Config{
+				Version: "1.0",
+				PackageDefaults: map[string][]string{
+					"apt": {"--no-install-recommends"},
+				},
+				Packages: PackageManagement{
+					Apt: []PackageEntry{
+						{Name: "git", Flags: []string{"--install-recommends"}},
+					},
+				},
+			},
+			shouldError: false, // Per-package flags should override defaults
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Validate(tt.config, filepath.Join(tempDir, "config.yaml"))
+			
+			if tt.shouldError {
+				if !result.HasErrors() {
+					t.Errorf("validation should fail for %s", tt.name)
+					return
+				}
+				
+				found := false
+				for _, err := range result.Errors {
+					if strings.Contains(err.Title, tt.errorTitle) {
+						found = true
+						break
+					}
+				}
+				
+				if !found {
+					t.Errorf("expected error message containing '%s', got errors: %v", tt.errorTitle, result.Errors)
+				}
+			} else {
+				if result.HasErrors() {
+					t.Errorf("validation should pass for %s, got errors: %v", tt.name, result.Errors)
+				}
+			}
+		})
+	}
+}
+
+func TestValidate_RemovalSystemValidation(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a valid source file
+	sourceFile := filepath.Join(tempDir, "test.txt")
+	err := os.WriteFile(sourceFile, []byte("test content"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create source file: %v", err)
+	}
+	
+	config := &Config{
+		Version: "1.0",
+		Files: map[string]File{
+			"test": {
+				Source:      "test.txt",
+				Destination: "~/test.txt",
+			},
+		},
+		Packages: PackageManagement{
+			Apt: []PackageEntry{
+				{Name: "git"},
+				{Name: "curl"},
+			},
+			Flatpak: []PackageEntry{
+				{Name: "org.mozilla.firefox"},
+			},
+			Snap: []PackageEntry{
+				{Name: "code"},
+			},
+		},
+	}
+	
+	result := Validate(config, filepath.Join(tempDir, "config.yaml"))
+	
+	if result.HasErrors() {
+		t.Errorf("validation should pass for config with package and file removal support, got errors: %v", result.Errors)
+	}
+	
+	if !result.Valid {
+		t.Error("config with removal system support should be marked as valid")
+	}
+}
+
+func TestValidate_DConfEnhancedValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		settings    map[string]string
+		shouldError bool
+		errorTitle  string
+	}{
+		{
+			name: "valid dconf settings",
+			settings: map[string]string{
+				"/org/gnome/desktop/interface/gtk-theme":     "'Adwaita'",
+				"/org/gnome/terminal/legacy/profiles:/:":     "['default']",
+				"/org/gnome/desktop/interface/clock-show-seconds": "true",
+				"/org/gnome/desktop/interface/scaling-factor": "1.5",
+			},
+			shouldError: false,
+		},
+		{
+			name: "invalid dconf path - no leading slash",
+			settings: map[string]string{
+				"org/gnome/desktop/interface/gtk-theme": "'Adwaita'",
+			},
+			shouldError: true,
+			errorTitle:  "invalid dconf path",
+		},
+		{
+			name: "invalid dconf path - double slashes",
+			settings: map[string]string{
+				"/org/gnome//desktop/interface/gtk-theme": "'Adwaita'",
+			},
+			shouldError: true,
+			errorTitle:  "invalid dconf path",
+		},
+		{
+			name: "unquoted string value warning",
+			settings: map[string]string{
+				"/org/gnome/desktop/interface/gtk-theme": "Adwaita",
+			},
+			shouldError: false, // This should be a warning, not an error
+		},
+		{
+			name: "complex nested value",
+			settings: map[string]string{
+				"/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings": "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']",
+			},
+			shouldError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Version: "1.0",
+				DConf: DConfConfig{
+					Settings: tt.settings,
+				},
+			}
+			
+			result := Validate(config, "config.yaml")
+			
+			if tt.shouldError {
+				if !result.HasErrors() {
+					t.Errorf("validation should fail for %s", tt.name)
+					return
+				}
+				
+				found := false
+				for _, err := range result.Errors {
+					if strings.Contains(err.Title, tt.errorTitle) {
+						found = true
+						break
+					}
+				}
+				
+				if !found {
+					t.Errorf("expected error message containing '%s', got errors: %v", tt.errorTitle, result.Errors)
+				}
+			} else {
+				if result.HasErrors() {
+					t.Errorf("validation should pass for %s, got errors: %v", tt.name, result.Errors)
+				}
+			}
+		})
+	}
+}

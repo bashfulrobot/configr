@@ -61,7 +61,7 @@ func TestLoadWithIncludes_WithIncludes(t *testing.T) {
 	// Create main config
 	mainConfig := `version: "1.0"
 includes:
-  - packages.yaml
+  - path: packages.yaml
 packages:
   apt:
     - git
@@ -142,7 +142,7 @@ func TestLoadWithIncludes_DirectoryInclude(t *testing.T) {
 	// Create main config
 	mainConfig := `version: "1.0"
 includes:
-  - packages/
+  - path: packages/
 `
 	configPath := filepath.Join(tempDir, "configr.yaml")
 	err = os.WriteFile(configPath, []byte(mainConfig), 0644)
@@ -187,7 +187,7 @@ func TestLoadWithIncludes_CircularInclude(t *testing.T) {
 	// Create main config that includes second.yaml
 	mainConfig := `version: "1.0"
 includes:
-  - second.yaml
+  - path: second.yaml
 `
 	configPath := filepath.Join(tempDir, "configr.yaml")
 	err := os.WriteFile(configPath, []byte(mainConfig), 0644)
@@ -197,7 +197,7 @@ includes:
 	
 	// Create second config that includes the main config (circular)
 	secondConfig := `includes:
-  - configr.yaml
+  - path: configr.yaml
 packages:
   apt:
     - git
@@ -232,7 +232,7 @@ func TestLoadWithIncludes_MissingInclude(t *testing.T) {
 	// Create main config with non-existent include
 	mainConfig := `version: "1.0"
 includes:
-  - nonexistent.yaml
+  - path: nonexistent.yaml
 `
 	configPath := filepath.Join(tempDir, "configr.yaml")
 	err := os.WriteFile(configPath, []byte(mainConfig), 0644)
@@ -417,5 +417,101 @@ func TestMergeConfigs(t *testing.T) {
 	
 	if dst.DConf.Settings["/setting1"] != "'new_value1'" {
 		t.Errorf("setting1 should be overridden by src config")
+	}
+}
+
+func TestConfigFileDiscoveryOrder(t *testing.T) {
+	// Test the configuration file discovery order as implemented in root.go
+	tempDir := t.TempDir()
+	
+	// Create test config files
+	configContent := `version: "1.0"
+packages:
+  apt:
+    - git
+`
+	
+	// Create config in different locations
+	currentDirConfig := filepath.Join(tempDir, "configr.yaml")
+	err := os.WriteFile(currentDirConfig, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("failed to create current dir config: %v", err)
+	}
+	
+	// Test explicit config file (highest priority)
+	explicitConfig := filepath.Join(tempDir, "explicit.yaml")
+	err = os.WriteFile(explicitConfig, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("failed to create explicit config: %v", err)
+	}
+	
+	// Test CONFIGR_CONFIG environment variable (second priority)
+	envConfig := filepath.Join(tempDir, "env.yaml")
+	err = os.WriteFile(envConfig, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("failed to create env config: %v", err)
+	}
+	
+	tests := []struct {
+		name           string
+		explicitConfig string
+		envConfig      string
+		expectedFile   string
+	}{
+		{
+			name:           "explicit config file takes precedence",
+			explicitConfig: explicitConfig,
+			envConfig:      envConfig,
+			expectedFile:   explicitConfig,
+		},
+		{
+			name:           "env config used when no explicit file",
+			explicitConfig: "",
+			envConfig:      envConfig,
+			expectedFile:   envConfig,
+		},
+		{
+			name:           "fallback to search when neither explicit nor env",
+			explicitConfig: "",
+			envConfig:      "",
+			expectedFile:   "", // Will use search path
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear viper state
+			viper.Reset()
+			
+			// Set up environment
+			if tt.envConfig != "" {
+				os.Setenv("CONFIGR_CONFIG", tt.envConfig)
+				defer os.Unsetenv("CONFIGR_CONFIG")
+			}
+			
+			// Simulate the initConfig logic from root.go
+			if tt.explicitConfig != "" {
+				viper.SetConfigFile(tt.explicitConfig)
+			} else if configEnv := os.Getenv("CONFIGR_CONFIG"); configEnv != "" {
+				viper.SetConfigFile(configEnv)
+			} else {
+				// For testing, we'll just use the current directory
+				viper.SetConfigName("configr")
+				viper.SetConfigType("yaml")
+				viper.AddConfigPath(tempDir)
+			}
+			
+			err := viper.ReadInConfig()
+			if err != nil && tt.expectedFile != "" {
+				t.Fatalf("failed to read config: %v", err)
+			}
+			
+			if tt.expectedFile != "" {
+				used := viper.ConfigFileUsed()
+				if used != tt.expectedFile {
+					t.Errorf("expected config file %s, got %s", tt.expectedFile, used)
+				}
+			}
+		})
 	}
 }

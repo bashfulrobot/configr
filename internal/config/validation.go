@@ -41,6 +41,18 @@ func (e *ValidationFailedError) Error() string {
 	return FormatValidationResultSimple(e.Result) + FormatQuickFixSimple(e.Result)
 }
 
+// FormatValidationResultEnhanced provides enhanced Rust-style error formatting
+func FormatValidationResultEnhanced(result *ValidationResult) string {
+	formatter := NewEnhancedFormatter()
+	return formatter.FormatValidationResultEnhanced(result)
+}
+
+// FormatQuickFixEnhanced provides enhanced quick fix suggestions
+func FormatQuickFixEnhanced(result *ValidationResult) string {
+	formatter := NewEnhancedFormatter()
+	return formatter.FormatQuickFixEnhanced(result)
+}
+
 // Add adds a validation error to the result
 func (vr *ValidationResult) Add(err ValidationError) {
 	if err.Type == "warning" {
@@ -65,6 +77,7 @@ func Validate(config *Config, configPath string) *ValidationResult {
 	if err != nil {
 		// If we can't parse with positions, fall back to basic validation
 		validateVersion(config, result, nil, configPath)
+		validateIncludes(config, result, nil, configPath)
 		validateRepositories(config, result, nil, configPath)
 		validatePackages(config, result, nil, configPath)
 		validateFiles(config, configPath, result, nil, configPath)
@@ -74,6 +87,7 @@ func Validate(config *Config, configPath string) *ValidationResult {
 	
 	// Basic structure validation with position information
 	validateVersion(config, result, configWithPos, configPath)
+	validateIncludes(config, result, configWithPos, configPath)
 	validateRepositories(config, result, configWithPos, configPath)
 	validatePackages(config, result, configWithPos, configPath)
 	validateFiles(config, configPath, result, configWithPos, configPath)
@@ -124,6 +138,118 @@ func validateVersion(config *Config, result *ValidationResult, configPos *Config
 			Help:       "use format like '1.0' or '1.0.0'",
 			Suggestion: "version: \"1.0\"",
 		})
+	}
+}
+
+// validateIncludes checks include configurations
+func validateIncludes(config *Config, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
+	if len(config.Includes) == 0 {
+		return
+	}
+
+	loader := NewAdvancedLoader()
+	baseDir := filepath.Dir(configPath)
+
+	for i, includeSpec := range config.Includes {
+		field := fmt.Sprintf("includes[%d]", i)
+		line, column := 0, 0
+		if configPos != nil {
+			line, column = configPos.FindFieldPosition(field)
+		}
+
+		// Validate the include spec structure
+		if err := loader.ValidateIncludeSpec(includeSpec); err != nil {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "invalid include specification",
+				File:    configPath,
+				Line:    line,
+				Column:  column,
+				Field:   field,
+				Message: err.Error(),
+				Help:    "fix the include specification according to the schema",
+				Note:    "includes require 'path' to be specified",
+			})
+			continue
+		}
+
+		// Validate conditions
+		for j, condition := range includeSpec.Conditions {
+			conditionField := fmt.Sprintf("%s.conditions[%d]", field, j)
+			if err := loader.validateCondition(condition); err != nil {
+				result.Add(ValidationError{
+					Type:    "error",
+					Title:   "invalid include condition",
+					File:    configPath,
+					Line:    line,
+					Column:  column,
+					Field:   conditionField,
+					Message: err.Error(),
+					Help:    "fix the condition specification",
+					Note:    "valid condition types: os, hostname, env, file_exists, dir_exists",
+				})
+			}
+		}
+
+		// Check for potentially dangerous patterns
+		if strings.Contains(includeSpec.Path, "..") {
+			result.Add(ValidationError{
+				Type:    "warning",
+				Title:   "potentially unsafe include path",
+				File:    configPath,
+				Line:    line,
+				Column:  column,
+				Field:   fmt.Sprintf("%s.path", field),
+				Value:   includeSpec.Path,
+				Message: "include path contains '..' which may access files outside the configuration directory",
+				Help:    "use relative paths within the configuration directory",
+				Note:    "while technically valid, this pattern can make configurations less portable",
+			})
+		}
+
+		// Test glob patterns for syntax validity
+		if strings.ContainsAny(includeSpec.Path, "*?[") {
+			pattern := filepath.Join(baseDir, includeSpec.Path)
+			if _, err := filepath.Glob(pattern); err != nil {
+				result.Add(ValidationError{
+					Type:    "error",
+					Title:   "invalid glob pattern",
+					File:    configPath,
+					Line:    line,
+					Column:  column,
+					Field:   fmt.Sprintf("%s.path", field),
+					Value:   includeSpec.Path,
+					Message: fmt.Sprintf("invalid glob pattern: %v", err),
+					Help:    "use valid glob syntax with *, ?, and [] patterns",
+					Note:    "glob patterns are relative to the configuration file directory",
+				})
+			}
+		}
+
+		// Validate paths (non-optional includes should exist)
+		if !includeSpec.Optional && !strings.ContainsAny(includeSpec.Path, "*?[") {
+			fullPath := filepath.Join(baseDir, includeSpec.Path)
+			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+				// Try with .yaml extension
+				if filepath.Ext(fullPath) == "" {
+					yamlPath := fullPath + ".yaml"
+					if _, err := os.Stat(yamlPath); err != nil {
+						result.Add(ValidationError{
+							Type:    "error",
+							Title:   "include file not found",
+							File:    configPath,
+							Line:    line,
+							Column:  column,
+							Field:   fmt.Sprintf("%s.path", field),
+							Value:   includeSpec.Path,
+							Message: fmt.Sprintf("include file does not exist: %s", fullPath),
+							Help:    "ensure the include file exists, create it, or mark as optional",
+							Note:    "set 'optional: true' if the file may not exist",
+						})
+					}
+				}
+			}
+		}
 	}
 }
 
