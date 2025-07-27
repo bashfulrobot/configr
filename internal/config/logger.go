@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/charmbracelet/log"
@@ -30,25 +31,45 @@ func SetVerbose(verbose bool) {
 
 // Success logs a success message with checkmark
 func Success(msg string, args ...interface{}) {
-	Logger.Info("✓ "+msg, args...)
+	if len(args) > 0 {
+		Logger.Info(fmt.Sprintf(msg, args...))
+	} else {
+		Logger.Info(msg)
+	}
 }
 
 // Warning logs a warning message
 func Warning(msg string, args ...interface{}) {
-	Logger.Warn("⚠ "+msg, args...)
+	if len(args) > 0 {
+		Logger.Warn(fmt.Sprintf(msg, args...))
+	} else {
+		Logger.Warn(msg)
+	}
 }
 
 // Error logs an error message
 func Error(msg string, args ...interface{}) {
-	Logger.Error("✗ "+msg, args...)
+	if len(args) > 0 {
+		Logger.Error(fmt.Sprintf(msg, args...))
+	} else {
+		Logger.Error(msg)
+	}
 }
 
 // Info logs an info message
 func Info(msg string, args ...interface{}) {
-	Logger.Info(msg, args...)
+	if len(args) > 0 {
+		Logger.Info(fmt.Sprintf(msg, args...))
+	} else {
+		Logger.Info(msg)
+	}
 }
 
 // Debug logs a debug message (only shown in verbose mode)
 func Debug(msg string, args ...interface{}) {
-	Logger.Debug(msg, args...)
+	if len(args) > 0 {
+		Logger.Debug(fmt.Sprintf(msg, args...))
+	} else {
+		Logger.Debug(msg)
+	}
 }
