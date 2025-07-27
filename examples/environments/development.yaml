@@ -1,0 +1,12 @@
+# Development environment configuration
+packages:
+  apt:
+    - "docker.io"
+    - "docker-compose"
+    - "postgresql-client"
+
+files:
+  dev_aliases:
+    source: "dotfiles/.dev_aliases"
+    destination: "~/.dev_aliases"
+    backup: true

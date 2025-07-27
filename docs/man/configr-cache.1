@@ -1,0 +1,30 @@
+.TH CACHE 1 "2025-07-27" "cache" "Manage configuration and system state cache"
+.SH NAME
+cache - Manage configuration and system state cache
+.SH SYNOPSIS
+\fBcache\fP [\fIoptions\&.\&.\&.\fP] [\fIargument\&.\&.\&.\fP]
+.SH DESCRIPTION
+Cache management commands for configr optimization system\&.
+.PP
+.PP
+The cache stores parsed configurations and system state to speed up repeated runs\&.
+.PP
+Cache data is stored in ~/\&.cache/configr/ by default\&.
+.SH COMMANDS
+.TP
+\fBclear\fP
+.RS 4
+Clear all cached data
+.RE
+.TP
+\fBinfo\fP
+.RS 4
+Show cache system information
+.RE
+.TP
+\fBstats\fP
+.RS 4
+Show cache usage statistics
+.RE
+.SH SEE ALSO
+configr(1), configr-cache(1)

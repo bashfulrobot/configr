@@ -1,0 +1,253 @@
+.TH CONFIGR 1 "2025-07-27" "configr" "Desktop Linux configuration management"
+.SH NAME
+configr - Desktop Linux configuration management
+.SH SYNOPSIS
+\fBconfigr\fP [\fIoptions\&.\&.\&.\fP] [\fIargument\&.\&.\&.\fP]
+.SH DESCRIPTION
+Configr is a single binary configuration management tool for Ubuntu desktop systems\&.
+.PP
+.PP
+It provides package management, configuration management, and dotfile management
+.PP
+capabilities similar to Ansible but contained in a single binary\&.
+.PP
+.PP
+Use 'configr validate' to check your configuration or 'configr --help' for more commands\&.
+.SH OPTIONS
+.TP
+\fB--c --config\fP
+config file path
+.TP
+\fB--no-color\fP
+disable colored output
+.TP
+\fB--v --verbose\fP
+verbose output
+.SH COMMANDS
+.TP
+\fBapply\fP [config-file]
+.RS 4
+Apply configuration changes to the system
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--dry-run\fP
+preview changes without applying them
+.TP
+\fB--interactive\fP
+enable interactive prompts for conflicts and permissions
+.TP
+\fB--optimize\fP
+enable caching and optimization for faster runs
+.TP
+\fB--preview\fP
+show configuration preview before applying
+.TP
+\fB--remove-packages\fP
+remove packages that are no longer in configuration
+.RE
+.TP
+\fBcache\fP
+.RS 4
+Manage configuration and system state cache
+.RE
+.TP
+\fBCOMMANDS\fP
+.RS 4
+\fBclear\fP
+.RS 4
+Clear all cached data
+.RE
+.TP
+\fBinfo\fP
+.RS 4
+Show cache system information
+.RE
+.TP
+\fBstats\fP
+.RS 4
+Show cache usage statistics
+.RE
+.RE
+.TP
+\fBcompletion\fP [bash|zsh|fish|powershell]
+.RS 4
+Generate shell completion scripts
+.RE
+.TP
+\fBhelp\fP [command]
+.RS 4
+Help about any command
+.RE
+.TP
+\fBincludes\fP [config-file]
+.RS 4
+Debug and analyze include system behavior
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--dry-run\fP
+show what would be included without loading
+.TP
+\fB--show-system\fP
+show system detection information
+.TP
+\fB--validate-only\fP
+only validate include specifications
+.RE
+.TP
+\fBinit\fP
+.RS 4
+Verify system readiness and install missing dependencies
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--check-only\fP
+Only check tool availability, don't offer installation
+.TP
+\fB--install-missing\fP
+Automatically install missing tools
+.TP
+\fB--v --verbose\fP
+Show detailed information about tool locations
+.RE
+.TP
+\fBman\fP
+.RS 4
+Generate Unix man pages
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--c --config\fP
+config file path
+.TP
+\fB--h --help\fP
+help for man
+.TP
+\fB--no-color\fP
+disable colored output
+.TP
+\fB--v --verbose\fP
+verbose output
+.RE
+.TP
+\fBpackages\fP
+.RS 4
+Package management operations
+.RE
+.TP
+\fBCOMMANDS\fP
+.RS 4
+\fBdeps\fP <package-name>
+.RS 4
+Show package dependencies and installation simulation
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--simulate\fP
+simulate installation to show what would be installed
+.TP
+\fB--tree\fP
+show dependency tree (currently shows dependencies only)
+.RE
+.TP
+\fBinfo\fP <package-name>
+.RS 4
+Get detailed information about a package
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.RE
+.TP
+\fBlist\fP
+.RS 4
+List installed packages from all package managers
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.TP
+\fB--upgradable\fP
+show only packages that can be upgraded
+.RE
+.TP
+\fBsearch\fP <search-term>
+.RS 4
+Search for packages across all package managers
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.RE
+.TP
+\fBupgrade\fP [package-names\&.\&.\&.]
+.RS 4
+Upgrade packages across all package managers
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.RE
+.RE
+.TP
+\fBrestore\fP
+.RS 4
+Restore files from backups created by configr
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--all\fP
+restore all available backups
+.TP
+\fB--cleanup\fP
+clean up expired backups
+.TP
+\fB--cleanup-orphaned\fP
+clean up orphaned backups no longer tracked
+.TP
+\fB--dry-run\fP
+preview restore operations without executing them
+.TP
+\fB--file\fP
+restore backup for specific file by name
+.TP
+\fB--list\fP
+list all available backups
+.TP
+\fB--max-age\fP
+maximum age for backups during cleanup (e\&.g\&. 7d, 24h, 30d)
+.TP
+\fB--stats\fP
+show comprehensive backup statistics
+.TP
+\fB--verbose\fP
+show detailed backup information
+.RE
+.TP
+\fBvalidate\fP [config-file]
+.RS 4
+Validate configuration file
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--v --verbose\fP
+Show detailed validation information
+.RE
+.SH SEE ALSO
+configr-validate(1), configr-apply(1), configr-init(1), configr-cache(1)

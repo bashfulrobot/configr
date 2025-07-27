@@ -1,0 +1,99 @@
+version: "1.0"
+
+# Package Removal System Example
+# This configuration demonstrates the automatic package removal system.
+# Packages are automatically removed when they're removed from the configuration.
+
+# Step 1 Configuration: Install these packages first
+packages:
+  apt:
+    - git               # Keep this package
+    - curl              # Keep this package  
+    - vim               # Will be removed in step 2
+    - htop              # Will be removed in step 2
+    - tree              # Will be removed in step 2
+    
+  flatpak:
+    - org.mozilla.Firefox      # Keep this package
+    - org.gimp.GIMP           # Will be removed in step 2
+    - com.spotify.Client      # Will be removed in step 2
+    
+  snap:
+    - hello             # Keep this package
+    - discord           # Will be removed in step 2
+    - code              # Will be removed in step 2
+
+files:
+  # Keep this file
+  permanent_config:
+    source: "sample-dotfiles/config.txt"
+    destination: "~/.config/configr-removal/permanent.conf"
+    backup: true
+  
+  # This file will be removed in step 2
+  temporary_config:
+    source: "sample-dotfiles/simple.txt"
+    destination: "~/.config/configr-removal/temporary.conf"
+    backup: true
+
+# Instructions for testing package removal:
+#
+# Step 1: Apply this full configuration
+# configr apply examples/package-removal.yaml
+# 
+# This will:
+# - Install all packages listed above
+# - Deploy both files
+# - Create state tracking file: ~/.config/configr/state.json
+#
+# Step 2: Edit this file and comment out the packages/files marked "Will be removed"
+# The configuration should look like this:
+#
+# packages:
+#   apt:
+#     - git
+#     - curl
+#     # - vim              # Commented out
+#     # - htop             # Commented out  
+#     # - tree             # Commented out
+#   
+#   flatpak:
+#     - org.mozilla.Firefox
+#     # - org.gimp.GIMP           # Commented out
+#     # - com.spotify.Client      # Commented out
+#   
+#   snap:
+#     - hello
+#     # - discord           # Commented out
+#     # - code              # Commented out
+#
+# files:
+#   permanent_config:
+#     source: "sample-dotfiles/config.txt"
+#     destination: "~/.config/configr-removal/permanent.conf"
+#     backup: true
+#   
+#   # temporary_config section commented out
+#
+# Step 3: Apply the modified configuration
+# configr apply examples/package-removal.yaml
+#
+# This will automatically:
+# - Remove vim, htop, tree (apt remove vim htop tree)
+# - Remove org.gimp.GIMP, com.spotify.Client (flatpak uninstall ...)
+# - Remove discord, code (snap remove discord code)
+# - Remove temporary.conf file and its symlink
+# - Update the state file
+#
+# Preview what will be removed:
+# configr apply --dry-run examples/package-removal.yaml
+#
+# Disable removal operations (packages/files won't be removed):
+# configr apply --remove-packages=false examples/package-removal.yaml
+#
+# Check state file contents:
+# cat ~/.config/configr/state.json
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/clock-show-seconds": "true"

@@ -1,0 +1,33 @@
+.TH INCLUDES 1 "2025-07-27" "includes" "Debug and analyze include system behavior"
+.SH NAME
+includes - Debug and analyze include system behavior
+.SH SYNOPSIS
+\fBincludes\fP [\fIoptions\&.\&.\&.\fP] [\fIargument\&.\&.\&.\fP]
+.SH DESCRIPTION
+Analyze the include system behavior for configuration files\&.
+.PP
+.PP
+This command helps debug advanced include features by showing:
+.PP
+- Which files would be included based on current system conditions
+.PP
+- System information used for conditional includes
+.PP
+- Include resolution order and any conflicts
+.PP
+- Validation of glob patterns and conditions
+.PP
+.PP
+Useful for debugging complex configurations with conditional includes\&.
+.SH OPTIONS
+.TP
+\fB--dry-run\fP
+show what would be included without loading
+.TP
+\fB--show-system\fP
+show system detection information
+.TP
+\fB--validate-only\fP
+only validate include specifications
+.SH SEE ALSO
+configr(1), configr-includes(1)

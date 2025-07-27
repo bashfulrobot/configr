@@ -1,0 +1,12 @@
+# Desktop-specific configuration
+packages:
+  apt:
+    - "steam"
+    - "discord"
+    - "obs-studio"
+
+files:
+  desktop_wallpaper:
+    source: "assets/desktop-wallpaper.jpg"
+    destination: "~/.local/share/backgrounds/wallpaper.jpg"
+    copy: true

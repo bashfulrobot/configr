@@ -1,0 +1,61 @@
+version: "1.0"
+
+# Interactive Configuration Example
+# This example demonstrates the interactive features of configr,
+# including conflict resolution, permission prompts, and file diff preview.
+
+packages:
+  apt:
+    - git
+    - curl
+    - vim
+
+files:
+  # Standard dotfile with interactive conflict resolution
+  bashrc:
+    source: "sample-dotfiles/simple.txt"
+    destination: "~/.bashrc"
+    backup: true
+    interactive: true          # Enable interactive prompts for conflicts
+
+  # System file with permission and ownership prompts
+  system_config:
+    source: "sample-dotfiles/system.conf"
+    destination: "/tmp/configr-example.conf"    # Using /tmp for safety
+    mode: "644"
+    owner: "root"
+    group: "root"
+    copy: true                 # Copy for system files
+    interactive: true          # Enable interactive prompts
+    prompt_permissions: true   # Ask before changing permissions
+    prompt_ownership: true     # Ask before changing ownership
+
+  # Configuration file with interactive features
+  app_config:
+    source: "sample-dotfiles/config.txt"
+    destination: "~/.config/configr-example/app.conf"
+    mode: "600"                # Sensitive configuration
+    backup: true
+    interactive: true          # Enable conflict resolution
+    prompt_permissions: true   # Confirm permission changes
+
+dconf:
+  settings:
+    # Example desktop settings
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+
+# To test interactive features:
+#
+# 1. Create some existing files at the destinations
+# 2. Run: configr apply --interactive examples/interactive-configuration.yaml
+# 3. You'll be prompted for:
+#    - File conflicts (overwrite, backup, skip, view diff)
+#    - Permission changes
+#    - Ownership changes
+#
+# Interactive options during conflicts:
+# - [o]verwrite: Replace existing file
+# - [b]ackup: Create backup and replace
+# - [s]kip: Skip this file
+# - [d]iff: View differences between files
+# - [q]uit: Exit without changes

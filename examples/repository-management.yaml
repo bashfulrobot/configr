@@ -1,0 +1,114 @@
+version: "1.0"
+
+# Repository Management Example
+# This example demonstrates comprehensive repository management
+# for both APT and Flatpak package sources.
+
+repositories:
+  apt:
+    # Ubuntu PPA (Personal Package Archive)
+    python39:
+      ppa: "deadsnakes/ppa"              # Python 3.9+ versions
+
+    # Custom repository with GPG key from URL
+    docker:
+      uri: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+      key: "https://download.docker.com/linux/ubuntu/gpg"
+
+    # Repository with GPG key from keyserver (hex format)
+    nodejs:
+      uri: "deb https://deb.nodesource.com/node_16.x focal main"
+      key: "0x9FD3B784BC1C6FC31A8A0A1C1655A0AB68576280"
+
+    # Microsoft Visual Studio Code repository
+    vscode:
+      uri: "deb [arch=amd64,arm64,armhf] https://packages.microsoft.com/repos/code stable main"
+      key: "BC528686B50D79E339D3721CEB3E94ADBE1229CF"
+
+    # Google Chrome repository
+    chrome:
+      uri: "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main"
+      key: "https://dl.google.com/linux/linux_signing_key.pub"
+
+  flatpak:
+    # Main Flatpak repository (Flathub)
+    flathub:
+      url: "https://flathub.org/repo/flathub.flatpakrepo"
+      user: false                        # System-wide installation
+
+    # KDE applications repository
+    kde:
+      url: "https://distribute.kde.org/kdeapps.flatpakrepo"
+      user: true                         # User-only installation
+
+    # GNOME nightly builds (optional example)
+    gnome-nightly:
+      url: "https://nightly.gnome.org/gnome-nightly.flatpakrepo"
+      user: true
+
+# Packages that will be installed from these repositories
+packages:
+  apt:
+    # From default Ubuntu repos
+    - git
+    - curl
+    
+    # From deadsnakes PPA
+    - python3.9
+    - python3.9-venv
+    
+    # From Docker repository
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+    
+    # From Node.js repository
+    - nodejs
+    
+    # From VS Code repository
+    - code
+    
+    # From Chrome repository (commented out for example)
+    # - google-chrome-stable
+
+  flatpak:
+    # From Flathub (system-wide)
+    - org.mozilla.Firefox
+    - org.gimp.GIMP
+    - org.libreoffice.LibreOffice
+    
+    # From KDE repository (user-only due to repo config)
+    - org.kde.krita
+    - org.kde.kdenlive
+
+files:
+  # Docker daemon configuration
+  docker_daemon:
+    source: "sample-dotfiles/system.conf"
+    destination: "/tmp/docker-daemon.json"    # Using /tmp for safety
+    owner: "root"
+    group: "root"
+    mode: "644"
+    copy: true
+    backup: true
+
+# Repository management features demonstrated:
+#
+# APT Repository Types:
+# - PPAs: Simple "user/repo" format for Ubuntu PPAs
+# - Custom repositories: Full repository URI with architecture
+# - GPG key handling: Both HTTPS URLs and keyserver key IDs
+#
+# Flatpak Repository Features:
+# - System vs user installation scope control
+# - Multiple remote repositories
+# - Repository URL validation
+#
+# To apply this configuration:
+# configr apply examples/repository-management.yaml
+#
+# To validate repository configuration:
+# configr validate examples/repository-management.yaml
+#
+# To preview repository additions:
+# configr apply --dry-run examples/repository-management.yaml

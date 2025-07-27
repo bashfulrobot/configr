@@ -1,0 +1,24 @@
+# Updated configuration file
+# This file demonstrates diff preview functionality
+
+version=2.0.0
+debug=true
+
+# New feature settings
+enable_new_feature=true
+new_feature_config=advanced
+
+# Modified server settings
+host=0.0.0.0
+port=8081
+timeout=60
+
+# Database settings (unchanged)
+db_host=localhost
+db_port=5432
+db_name=myapp_db
+
+# New section
+[advanced]
+option1=value1
+option2=value2

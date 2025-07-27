@@ -1,0 +1,6 @@
+# Testing packages - only loaded when CONFIGR_TESTING=true
+packages:
+  apt:
+    - "stress"
+    - "memtester"
+    - "iperf3"

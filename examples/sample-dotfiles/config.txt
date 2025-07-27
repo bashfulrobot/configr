@@ -1,0 +1,13 @@
+# Sample application configuration
+app_name=MyApp
+version=1.0.0
+debug=false
+
+# Server settings
+host=localhost
+port=8080
+
+# Database settings
+db_host=localhost
+db_port=5432
+db_name=myapp_db

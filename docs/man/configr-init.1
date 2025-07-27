@@ -1,0 +1,25 @@
+.TH INIT 1 "2025-07-27" "init" "Verify system readiness and install missing dependencies"
+.SH NAME
+init - Verify system readiness and install missing dependencies
+.SH SYNOPSIS
+\fBinit\fP [\fIoptions\&.\&.\&.\fP] [\fIargument\&.\&.\&.\fP]
+.SH DESCRIPTION
+Check for required tools and dependencies needed by configr\&.
+.PP
+	
+.PP
+This command verifies that all required tools (apt, dconf) are available
+.PP
+and offers to install missing optional tools (flatpak, snapd)\&.
+.SH OPTIONS
+.TP
+\fB--check-only\fP
+Only check tool availability, don't offer installation
+.TP
+\fB--install-missing\fP
+Automatically install missing tools
+.TP
+\fB--v --verbose\fP
+Show detailed information about tool locations
+.SH SEE ALSO
+configr(1), configr-init(1)

@@ -1,0 +1,9 @@
+This is a simple text file for demonstration purposes.
+It contains basic content and will be copied (not symlinked) to the destination.
+
+Content:
+- Line 1
+- Line 2
+- Line 3
+
+End of file.

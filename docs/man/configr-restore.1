@@ -1,0 +1,59 @@
+.TH RESTORE 1 "2025-07-27" "restore" "Restore files from backups created by configr"
+.SH NAME
+restore - Restore files from backups created by configr
+.SH SYNOPSIS
+\fBrestore\fP [\fIoptions\&.\&.\&.\fP] [\fIargument\&.\&.\&.\fP]
+.SH DESCRIPTION
+Restore manages backup files created by configr during file deployment\&.
+.PP
+.PP
+This command can:
+.PP
+- List all available backups with their details
+.PP
+- Restore specific files from backup
+.PP
+- Restore all available backups
+.PP
+- Clean up expired backups based on age
+.PP
+- Clean up orphaned backups no longer tracked
+.PP
+- Show comprehensive backup statistics
+.PP
+- Show backup information and status
+.PP
+.PP
+Backups are automatically created when configr deploys files with the 'backup: true' option\&.
+.PP
+Each backup is timestamped and stored alongside the original file location\&.
+.SH OPTIONS
+.TP
+\fB--all\fP
+restore all available backups
+.TP
+\fB--cleanup\fP
+clean up expired backups
+.TP
+\fB--cleanup-orphaned\fP
+clean up orphaned backups no longer tracked
+.TP
+\fB--dry-run\fP
+preview restore operations without executing them
+.TP
+\fB--file\fP
+restore backup for specific file by name
+.TP
+\fB--list\fP
+list all available backups
+.TP
+\fB--max-age\fP
+maximum age for backups during cleanup (e\&.g\&. 7d, 24h, 30d)
+.TP
+\fB--stats\fP
+show comprehensive backup statistics
+.TP
+\fB--verbose\fP
+show detailed backup information
+.SH SEE ALSO
+configr(1), configr-restore(1)

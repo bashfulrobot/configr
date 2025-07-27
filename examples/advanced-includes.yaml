@@ -1,0 +1,86 @@
+version: "1.0"
+
+# Example configuration demonstrating advanced include features
+# This configuration shows glob patterns, conditional includes, and system detection
+
+# Unified includes system supports both simple paths and advanced features
+includes:
+  # Simple includes (just path strings)
+  - path: "common/base.yaml"     # Basic include
+  - path: "common/"              # Directory with default.yaml
+  
+  # Glob pattern - include all YAML files from packages directory
+  - path: "packages/*.yaml"
+    description: "All package configurations"
+    optional: false
+  
+  # Conditional include based on operating system
+  - path: "os-specific/linux.yaml"
+    description: "Linux-specific configuration"
+    optional: true
+    conditions:
+      - type: "os"
+        value: "linux"
+        operator: "equals"
+  
+  # Conditional include based on hostname
+  - path: "hosts/desktop.yaml"
+    description: "Desktop-specific configuration"
+    optional: true
+    conditions:
+      - type: "hostname"
+        value: "desktop"
+        operator: "contains"
+  
+  # Environment variable based include
+  - path: "environments/development.yaml"
+    description: "Development environment configuration"
+    optional: true
+    conditions:
+      - type: "env"
+        value: "NODE_ENV=development"
+        operator: "equals"
+  
+  # Multiple conditions (all must be true)
+  - path: "specialized/dev-workstation.yaml"
+    description: "Development workstation specific config"
+    optional: true
+    conditions:
+      - type: "os"
+        value: "linux"
+      - type: "env"
+        value: "USER"  # Just check if USER env var exists
+      - type: "dir_exists"
+        value: "/home/dev"
+  
+  # File existence based include
+  - path: "user-overrides.yaml"
+    description: "User-specific overrides"
+    optional: true
+    conditions:
+      - type: "file_exists"
+        value: "/home/$USER/.configr-overrides"
+  
+  # Glob with conditions - include test configs only in development
+  - path: "testing/*.yaml"
+    description: "Testing configurations"
+    optional: true
+    conditions:
+      - type: "env"
+        value: "CONFIGR_TESTING=true"
+
+# Base configuration that will be merged with includes
+packages:
+  apt:
+    - "curl"
+    - "wget"
+
+files:
+  base_config:
+    source: "dotfiles/.bashrc"
+    destination: "~/.bashrc"
+    backup: true
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita'"

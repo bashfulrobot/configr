@@ -1,0 +1,15 @@
+# Development packages
+packages:
+  apt:
+    - "build-essential"
+    - "nodejs"
+    - "npm"
+    - "python3-pip"
+  
+  flatpak:
+    - "com.visualstudio.code"
+    - "org.mozilla.firefox"
+  
+  snap:
+    - name: "go"
+      flags: ["--classic"]

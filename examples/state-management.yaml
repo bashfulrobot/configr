@@ -1,0 +1,68 @@
+version: "1.0"
+
+# State Management and Removal Example
+# This example demonstrates how configr tracks and manages package/file state
+# for automatic removal when items are removed from configuration.
+
+# Initial configuration - install packages and deploy files
+packages:
+  apt:
+    - git
+    - curl
+    - vim
+    - htop              # This will be removed in step 2
+  
+  flatpak:
+    - org.mozilla.Firefox
+    # org.gimp.GIMP will be removed in step 2
+  
+  snap:
+    - hello
+    # discord will be removed in step 2
+
+files:
+  # Files that will be deployed
+  config1:
+    source: "sample-dotfiles/config.txt"
+    destination: "~/.config/configr-example/config1.txt"
+    backup: true
+  
+  config2:
+    source: "sample-dotfiles/simple.txt"
+    destination: "~/.config/configr-example/config2.txt"
+    backup: true
+    # config2 will be removed in step 2
+
+# To demonstrate state management:
+#
+# Step 1: Apply this configuration
+# configr apply examples/state-management.yaml
+# This will:
+# - Install all packages
+# - Deploy all files
+# - Create state file: ~/.config/configr/state.json
+#
+# Step 2: Modify this file by commenting out:
+# - htop package
+# - org.gimp.GIMP flatpak
+# - discord snap
+# - config2 file
+#
+# Step 3: Apply again
+# configr apply examples/state-management.yaml
+# This will:
+# - Remove htop (apt remove htop)
+# - Remove org.gimp.GIMP (flatpak uninstall org.gimp.GIMP)
+# - Remove discord (snap remove discord)
+# - Remove config2 file and its symlink
+# - Update state file
+#
+# Preview removals first:
+# configr apply --dry-run examples/state-management.yaml
+#
+# Disable removal operations:
+# configr apply --remove-packages=false examples/state-management.yaml
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/clock-show-seconds": "true"

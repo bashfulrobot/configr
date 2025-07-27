@@ -1,0 +1,119 @@
+version: "1.0"
+
+# Performance Optimization Example
+# This example demonstrates configr's caching and optimization features
+# for faster repeated runs on large configurations.
+
+# Include multiple files to demonstrate configuration caching
+includes:
+  - path: "common/base.yaml"
+  - path: "testing/test-packages.yaml"
+  - glob: "packages/*.yaml"
+    optional: true
+
+# Large package list to demonstrate package state caching
+packages:
+  apt:
+    - git
+    - curl
+    - vim
+    - htop
+    - tree
+    - wget
+    - build-essential
+    - python3
+    - python3-pip
+    - nodejs
+    - npm
+    - docker.io
+    - postgresql
+    - nginx
+    - redis-server
+    - sqlite3
+    - jq
+    - unzip
+    - zip
+    - rsync
+    - ssh
+    - tmux
+    - screen
+    - neofetch
+    - bat
+    - fd-find
+    - ripgrep
+    - exa
+    - fzf
+  
+  flatpak:
+    - org.mozilla.Firefox
+    - org.gimp.GIMP
+    - org.libreoffice.LibreOffice
+    - com.spotify.Client
+    - org.videolan.VLC
+    - org.blender.Blender
+    - org.audacityteam.Audacity
+    - org.inkscape.Inkscape
+    - org.gnome.Calculator
+    - org.gnome.TextEditor
+  
+  snap:
+    - discord
+    - code
+    - postman
+    - slack
+    - zoom-client
+    - teams
+    - skype
+    - vlc
+    - gimp
+    - blender
+
+# Multiple files to demonstrate file state caching
+files:
+  config1:
+    source: "sample-dotfiles/config.txt"
+    destination: "~/.config/configr-perf/config1.txt"
+  
+  config2:
+    source: "sample-dotfiles/simple.txt"
+    destination: "~/.config/configr-perf/config2.txt"
+  
+  config3:
+    source: "sample-dotfiles/system.conf"
+    destination: "~/.config/configr-perf/config3.conf"
+  
+  config4:
+    source: "sample-dotfiles/updated-config.txt"
+    destination: "~/.config/configr-perf/config4.txt"
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
+    "/org/gnome/desktop/wm/preferences/button-layout": "'close,minimize,maximize:'"
+    "/org/gnome/desktop/interface/clock-show-seconds": "true"
+    "/org/gnome/desktop/interface/show-battery-percentage": "true"
+
+# To test performance optimization:
+#
+# First run (no cache):
+# time configr apply examples/performance-optimization.yaml
+#
+# Second run (with cache):
+# time configr apply examples/performance-optimization.yaml
+# Should be significantly faster due to:
+# - Cached configuration parsing
+# - Cached package installation status
+# - Cached file deployment state
+#
+# View cache statistics:
+# configr cache stats
+#
+# Clear cache to test without optimization:
+# configr cache clear
+#
+# Disable optimization:
+# configr apply --optimize=false examples/performance-optimization.yaml
+#
+# Cache information:
+# configr cache info

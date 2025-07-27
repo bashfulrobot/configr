@@ -1,0 +1,132 @@
+version: "1.0"
+
+# Cache Management Example
+# This example demonstrates configr's caching system and how to manage it.
+
+# Include files to demonstrate configuration caching
+includes:
+  - path: "common/base.yaml"
+  - glob: "packages/*.yaml"
+    optional: true
+
+# Medium-sized configuration to demonstrate caching benefits
+packages:
+  apt:
+    - git
+    - curl
+    - vim
+    - htop
+    - tree
+    - build-essential
+    - python3
+    - nodejs
+    - docker.io
+    - postgresql
+  
+  flatpak:
+    - org.mozilla.Firefox
+    - org.gimp.GIMP
+    - org.libreoffice.LibreOffice
+    - com.spotify.Client
+    - org.videolan.VLC
+  
+  snap:
+    - discord
+    - code
+    - postman
+
+files:
+  config1:
+    source: "sample-dotfiles/config.txt"
+    destination: "~/.config/configr-cache/config1.txt"
+  
+  config2:
+    source: "sample-dotfiles/simple.txt"
+    destination: "~/.config/configr-cache/config2.txt"
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/interface/icon-theme": "'Adwaita'"
+
+# Cache Management Commands and Usage:
+#
+# 1. Apply configuration with caching (default):
+# configr apply examples/cache-management.yaml
+# 
+# 2. View cache statistics:
+# configr cache stats
+# Shows:
+# - Cache hit/miss ratios
+# - Cache size and usage
+# - Performance improvements
+# - Cache file locations
+#
+# 3. Show cache system information:
+# configr cache info
+# Shows:
+# - Cache directory locations
+# - Cache file structure
+# - Current cache status
+# - System information
+#
+# 4. Clear all cache data:
+# configr cache clear
+# Removes:
+# - Configuration cache
+# - System state cache
+# - Package state cache
+# - File state cache
+#
+# 5. Apply without caching (for comparison):
+# time configr apply --optimize=false examples/cache-management.yaml
+#
+# 6. Apply with caching (should be faster):
+# time configr apply examples/cache-management.yaml
+#
+# Cache Performance Demonstration:
+#
+# First run (building cache):
+# $ time configr apply examples/cache-management.yaml
+# real    0m45.123s
+#
+# Second run (using cache):
+# $ time configr apply examples/cache-management.yaml
+# real    0m12.456s  # ~3-4x faster
+#
+# Cache Statistics Example:
+# $ configr cache stats
+# Cache Statistics:
+# ==================
+# Configuration Cache:
+#   Files cached: 3
+#   Hit ratio: 85%
+#   Total size: 2.4 KB
+#   
+# System State Cache:
+#   Packages cached: 25
+#   Files cached: 2
+#   Hit ratio: 92%
+#   Age: 5 minutes
+#   
+# Performance:
+#   Average speedup: 3.2x
+#   Time saved: 32.7s
+#
+# Cache Locations:
+#   Config cache: ~/.cache/configr/
+#   State cache: ~/.cache/configr/
+#
+# Cache Invalidation:
+# Cache is automatically invalidated when:
+# - Configuration files are modified
+# - Include files are changed
+# - Source files for file deployment are updated
+# - Cache TTL expires (10min for packages, 1hr for system state)
+#
+# Troubleshooting:
+# If you experience issues, try clearing the cache:
+# configr cache clear
+# 
+# Then rerun your configuration:
+# configr apply examples/cache-management.yaml

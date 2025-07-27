@@ -1,0 +1,56 @@
+.TH APPLY 1 "2025-07-27" "apply" "Apply configuration changes to the system"
+.SH NAME
+apply - Apply configuration changes to the system
+.SH SYNOPSIS
+\fBapply\fP [\fIoptions\&.\&.\&.\fP] [\fIargument\&.\&.\&.\fP]
+.SH DESCRIPTION
+Apply loads and applies the configuration to your system\&.
+.PP
+.PP
+This command will:
+.PP
+- Remove packages no longer in configuration (if --remove-packages=true)
+.PP
+- Add APT and Flatpak repositories
+.PP
+- Deploy and symlink files to their destinations
+.PP
+- Install APT, Flatpak, and Snap packages
+.PP
+- Apply dconf settings for desktop configuration
+.PP
+- Create backups of existing files when requested
+.PP
+- Track package state for future removal operations
+.PP
+- Interactively resolve file conflicts when --interactive flag is used
+.PP
+.PP
+Interactive features include:
+.PP
+- Conflict resolution prompts for existing files
+.PP
+- File diff preview before replacement
+.PP
+- Interactive permission and ownership configuration
+.PP
+.PP
+By default, it looks for 'configr\&.yaml' in standard locations\&.
+.SH OPTIONS
+.TP
+\fB--dry-run\fP
+preview changes without applying them
+.TP
+\fB--interactive\fP
+enable interactive prompts for conflicts and permissions
+.TP
+\fB--optimize\fP
+enable caching and optimization for faster runs
+.TP
+\fB--preview\fP
+show configuration preview before applying
+.TP
+\fB--remove-packages\fP
+remove packages that are no longer in configuration
+.SH SEE ALSO
+configr(1), configr-apply(1)

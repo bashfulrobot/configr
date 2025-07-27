@@ -1,0 +1,10 @@
+# Media packages
+packages:
+  apt:
+    - "vlc"
+    - "gimp"
+    - "audacity"
+  
+  flatpak:
+    - "org.videolan.VLC"
+    - "org.gimp.GIMP"

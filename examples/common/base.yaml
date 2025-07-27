@@ -1,0 +1,12 @@
+# Base configuration included by all systems
+packages:
+  apt:
+    - "git"
+    - "vim"
+    - "htop"
+
+files:
+  gitconfig:
+    source: "dotfiles/.gitconfig"
+    destination: "~/.gitconfig"
+    backup: true

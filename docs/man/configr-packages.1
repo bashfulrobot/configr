@@ -1,0 +1,85 @@
+.TH PACKAGES 1 "2025-07-27" "packages" "Package management operations"
+.SH NAME
+packages - Package management operations
+.SH SYNOPSIS
+\fBpackages\fP [\fIoptions\&.\&.\&.\fP] [\fIargument\&.\&.\&.\fP]
+.SH DESCRIPTION
+Package management operations for APT, Flatpak, and Snap packages\&.
+.PP
+.PP
+This command provides advanced package management capabilities including:
+.PP
+- Search for packages across all package managers
+.PP
+- Get detailed information about packages
+.PP
+- List and upgrade packages
+.PP
+- Manage package dependencies
+.PP
+.PP
+Use the subcommands to perform specific package operations\&.
+.SH COMMANDS
+.TP
+\fBdeps\fP <package-name>
+.RS 4
+Show package dependencies and installation simulation
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--simulate\fP
+simulate installation to show what would be installed
+.TP
+\fB--tree\fP
+show dependency tree (currently shows dependencies only)
+.RE
+.TP
+\fBinfo\fP <package-name>
+.RS 4
+Get detailed information about a package
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.RE
+.TP
+\fBlist\fP
+.RS 4
+List installed packages from all package managers
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.TP
+\fB--upgradable\fP
+show only packages that can be upgraded
+.RE
+.TP
+\fBsearch\fP <search-term>
+.RS 4
+Search for packages across all package managers
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.RE
+.TP
+\fBupgrade\fP [package-names\&.\&.\&.]
+.RS 4
+Upgrade packages across all package managers
+.RE
+.TP
+\fBOPTIONS\fP
+.RS 4
+\fB--type\fP
+package manager type (apt, flatpak, snap)
+.RE
+.SH SEE ALSO
+configr(1), configr-packages(1)

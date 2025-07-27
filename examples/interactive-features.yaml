@@ -1,0 +1,57 @@
+version: "1.0"
+
+# Example configuration demonstrating interactive features
+# Run with: configr apply examples/interactive-features.yaml --interactive
+
+files:
+  # File with interactive conflict resolution
+  interactive_dotfile:
+    source: "examples/sample-dotfiles/.vimrc"
+    destination: "~/.vimrc"
+    backup: true
+    interactive: true  # Enable interactive prompts for this file specifically
+  
+  # File with interactive permission prompting
+  config_with_permissions:
+    source: "examples/sample-dotfiles/config.txt"
+    destination: "~/.config/app/config.txt"
+    mode: "644"
+    prompt_permissions: true  # Prompt user to confirm/change permissions
+    interactive: true
+  
+  # File with interactive ownership prompting
+  system_config:
+    source: "examples/sample-dotfiles/system.conf"
+    destination: "/tmp/system.conf"  # Using /tmp for safety in examples
+    owner: "root"
+    group: "root"
+    mode: "644"
+    prompt_ownership: true  # Prompt user to confirm/change ownership
+    prompt_permissions: true
+    interactive: true
+    backup: true
+  
+  # Non-interactive file for comparison
+  simple_file:
+    source: "examples/sample-dotfiles/simple.txt"
+    destination: "~/simple.txt"
+    copy: true  # Copy instead of symlink
+    backup: true
+  
+  # File that demonstrates diff preview
+  updated_config:
+    source: "examples/sample-dotfiles/updated-config.txt"
+    destination: "~/existing-config.txt"
+    interactive: true
+    backup: true
+
+# Package management (not affected by interactive features)
+packages:
+  apt:
+    - "curl"
+    - "git"
+
+# DConf settings (not affected by interactive features)
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"

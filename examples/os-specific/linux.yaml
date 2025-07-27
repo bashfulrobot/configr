@@ -1,0 +1,11 @@
+# Linux-specific configuration
+packages:
+  apt:
+    - "ubuntu-restricted-extras"
+    - "gnome-tweaks"
+    - "dconf-editor"
+
+dconf:
+  settings:
+    "/org/gnome/shell/enabled-extensions": "['dash-to-dock@micxgx.gmail.com']"
+    "/org/gnome/desktop/interface/gtk-theme": "'Yaru-dark'"
