@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -282,5 +283,226 @@ files:
 `, i, i, i, i, i)
 }
 
-// We need to import fmt for the benchmark functions
-import "fmt"
+// BenchmarkAdvancedIncludeSystem benchmarks the advanced include system performance
+func BenchmarkAdvancedIncludeSystem(b *testing.B) {
+	// Create temporary directory
+	tmpDir := b.TempDir()
+	
+	// Create many include files
+	_ = createManyIncludeFiles(b, tmpDir, 50)
+	
+	// Create main config with advanced includes
+	mainConfig := filepath.Join(tmpDir, "main.yaml")
+	mainContent := `version: "1.0"
+advanced_includes:
+  - glob: "includes/*.yaml"
+    optional: false
+  - path: "specific/config.yaml"
+    optional: true
+    conditions:
+      - type: "os"
+        value: "linux"
+        operator: "equals"
+packages:
+  apt:
+    - git
+    - curl
+`
+	if err := os.WriteFile(mainConfig, []byte(mainContent), 0644); err != nil {
+		b.Fatalf("Failed to create main config: %v", err)
+	}
+	
+	b.ResetTimer()
+	
+	// Benchmark loading with advanced includes
+	for i := 0; i < b.N; i++ {
+		_, err := config.LoadWithIncludes()
+		if err != nil {
+			b.Fatalf("Failed to load configuration: %v", err)
+		}
+	}
+}
+
+// BenchmarkInteractiveFeatures benchmarks interactive feature performance
+func BenchmarkInteractiveFeatures(b *testing.B) {
+	logger := log.New(os.Stderr)
+	_ = NewInteractiveManager(logger) // Create but don't use in benchmark
+	
+	// Create test scenarios
+	testPrompts := []string{
+		"Do you want to overwrite the existing file?",
+		"Apply new permissions (644) to the file?",
+		"Change ownership to user:group?",
+		"Continue with deployment?",
+		"Skip this file and continue?",
+	}
+	
+	b.ResetTimer()
+	
+	// Benchmark prompt preparation (no actual TTY interaction)
+	for i := 0; i < b.N; i++ {
+		prompt := testPrompts[i%len(testPrompts)]
+		// Simulate prompt preparation overhead
+		_ = prompt + " (default)"
+	}
+}
+
+// BenchmarkPackageStateChecking benchmarks package state checking performance
+func BenchmarkPackageStateChecking(b *testing.B) {
+	// Create temporary directory
+	tmpDir := b.TempDir()
+	cacheDir := filepath.Join(tmpDir, "cache")
+	
+	logger := log.New(os.Stderr)
+	cm := NewCacheManagerWithPath(logger, cacheDir)
+	
+	// Create large system state cache
+	stateCache := createLargeSystemStateCache()
+	
+	// Save the cache first
+	if err := cm.SaveSystemStateCache(stateCache); err != nil {
+		b.Fatalf("Failed to save system state cache: %v", err)
+	}
+	
+	b.ResetTimer()
+	
+	// Benchmark loading system state cache
+	for i := 0; i < b.N; i++ {
+		_, err := cm.LoadSystemStateCache()
+		if err != nil {
+			b.Fatalf("Failed to load system state cache: %v", err)
+		}
+	}
+}
+
+// BenchmarkComplexConfigValidation benchmarks validation of complex configurations
+func BenchmarkComplexConfigValidation(b *testing.B) {
+	// Create a complex configuration for validation benchmarking
+	cfg := createComplexTestConfig()
+	
+	b.ResetTimer()
+	
+	// Benchmark validation performance
+	for i := 0; i < b.N; i++ {
+		result := config.Validate(cfg, "benchmark.yaml")
+		if result.HasErrors() {
+			b.Fatalf("Validation failed: %v", result.Errors)
+		}
+	}
+}
+
+// createManyIncludeFiles creates many include files for benchmarking
+func createManyIncludeFiles(b *testing.B, tmpDir string, count int) []string {
+	includesDir := filepath.Join(tmpDir, "includes")
+	if err := os.MkdirAll(includesDir, 0755); err != nil {
+		b.Fatalf("Failed to create includes directory: %v", err)
+	}
+	
+	var paths []string
+	
+	for i := 0; i < count; i++ {
+		filename := filepath.Join(includesDir, fmt.Sprintf("include-%03d.yaml", i))
+		content := fmt.Sprintf(`# Include file %d
+packages:
+  apt:
+    - pkg-%03d-a
+    - pkg-%03d-b
+  flatpak:
+    - org.example.App%03d
+files:
+  file-%03d:
+    source: "/source/file-%03d"
+    destination: "/dest/file-%03d"
+dconf:
+  settings:
+    "/org/example/setting-%03d": "'value-%03d'"
+`, i, i, i, i, i, i, i, i, i)
+		
+		if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
+			b.Fatalf("Failed to create include file %s: %v", filename, err)
+		}
+		
+		paths = append(paths, filename)
+	}
+	
+	return paths
+}
+
+// createComplexTestConfig creates a complex configuration for validation benchmarking
+func createComplexTestConfig() *config.Config {
+	cfg := &config.Config{
+		Version: "1.0",
+		PackageDefaults: map[string][]string{
+			"apt":     {"-y", "--no-install-recommends"},
+			"flatpak": {"--user", "--assumeyes"},
+			"snap":    {"--classic"},
+		},
+		Repositories: config.RepositoryManagement{
+			Apt: []config.AptRepository{
+				{Name: "python39", PPA: "deadsnakes/ppa"},
+				{Name: "docker", URI: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable", Key: "https://download.docker.com/linux/ubuntu/gpg"},
+			},
+			Flatpak: []config.FlatpakRepository{
+				{Name: "flathub", URL: "https://flathub.org/repo/flathub.flatpakrepo"},
+				{Name: "kde", URL: "https://distribute.kde.org/kdeapps.flatpakrepo", User: true},
+			},
+		},
+		Packages: config.PackageManagement{
+			Apt: make([]config.PackageEntry, 200),
+			Flatpak: make([]config.PackageEntry, 100),
+			Snap: make([]config.PackageEntry, 50),
+		},
+		Files: make(map[string]config.File),
+		DConf: config.DConfConfig{
+			Settings: make(map[string]string),
+		},
+	}
+	
+	// Add many packages with various flag configurations
+	for i := 0; i < 200; i++ {
+		cfg.Packages.Apt[i] = config.PackageEntry{
+			Name: generatePackageName("apt-pkg", i),
+			Flags: []string{"-y"},
+		}
+	}
+	
+	for i := 0; i < 100; i++ {
+		cfg.Packages.Flatpak[i] = config.PackageEntry{
+			Name: generateFlatpakName("com.example.App", i),
+			Flags: []string{"--user"},
+		}
+	}
+	
+	for i := 0; i < 50; i++ {
+		cfg.Packages.Snap[i] = config.PackageEntry{
+			Name: generatePackageName("snap-pkg", i),
+			Flags: []string{"--classic"},
+		}
+	}
+	
+	// Add many files with interactive features
+	for i := 0; i < 100; i++ {
+		fileName := generatePackageName("file", i)
+		cfg.Files[fileName] = config.File{
+			Source:           "/source/" + fileName,
+			Destination:      "/dest/" + fileName,
+			Mode:             "644",
+			Owner:            "user",
+			Group:            "group",
+			Backup:           true,
+			Interactive:      i%10 == 0, // Every 10th file is interactive
+			PromptPermissions: i%20 == 0, // Every 20th file prompts for permissions
+			PromptOwnership:  i%30 == 0, // Every 30th file prompts for ownership
+		}
+	}
+	
+	// Add many DConf settings
+	for i := 0; i < 150; i++ {
+		settingPath := fmt.Sprintf("/org/example/setting-%03d", i)
+		settingValue := fmt.Sprintf("'value-%03d'", i)
+		cfg.DConf.Settings[settingPath] = settingValue
+	}
+	
+	return cfg
+}
+

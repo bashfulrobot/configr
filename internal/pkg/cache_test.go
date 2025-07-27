@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -105,7 +106,7 @@ func TestCacheManager_InvalidateOnFileChange(t *testing.T) {
 	}
 
 	// Wait a bit to ensure different modification time
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond) // Increase wait time for better reliability
 
 	// Modify config file
 	if err := os.WriteFile(configPath, []byte("version: '2.0'"), 0644); err != nil {
@@ -118,7 +119,10 @@ func TestCacheManager_InvalidateOnFileChange(t *testing.T) {
 		t.Fatalf("LoadCachedConfig() failed: %v", err)
 	}
 	if cached != nil {
-		t.Error("Expected cache miss after file modification, got cache hit")
+		// Let's get more debug info
+		originalInfo, _ := os.Stat(configPath)
+		t.Errorf("Expected cache miss after file modification, got cache hit. Current mod time: %v, Cached mod time: %v", 
+			originalInfo.ModTime().Unix(), cached.ModTimes[configPath])
 	}
 }
 
@@ -199,20 +203,42 @@ func TestCacheManager_CacheExpiration(t *testing.T) {
 	logger := log.New(os.Stderr)
 	cm := NewCacheManagerWithPath(logger, cacheDir)
 
-	// Create old system state cache (older than 1 hour)
-	oldCache := &SystemStateCache{
+	// Create and save a cache normally
+	cache := &SystemStateCache{
 		PackageState: PackageInstallationState{
 			AptPackages: make(map[string]PackageCacheEntry),
-			LastUpdated: time.Now().Add(-2 * time.Hour),
+			LastUpdated: time.Now(),
 		},
-		LastChecked: time.Now().Add(-2 * time.Hour),
-		SystemHash:  "old-hash",
-		Version:     "1.0",
+		SystemHash: "test-hash",
+		Version:    "1.0",
 	}
 
-	// Save old cache
-	if err := cm.SaveSystemStateCache(oldCache); err != nil {
+	// Save cache (this will set LastChecked to current time)
+	if err := cm.SaveSystemStateCache(cache); err != nil {
 		t.Fatalf("SaveSystemStateCache() failed: %v", err)
+	}
+
+	// Manually modify the cache file to simulate an old cache
+	cachePath := filepath.Join(cacheDir, "system_state.json")
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("Failed to read cache file: %v", err)
+	}
+
+	var savedCache SystemStateCache
+	if err := json.Unmarshal(data, &savedCache); err != nil {
+		t.Fatalf("Failed to parse cache: %v", err)
+	}
+
+	// Modify to be old and save back
+	savedCache.LastChecked = time.Now().Add(-2 * time.Hour)
+	modifiedData, err := json.MarshalIndent(savedCache, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal modified cache: %v", err)
+	}
+
+	if err := os.WriteFile(cachePath, modifiedData, 0644); err != nil {
+		t.Fatalf("Failed to write modified cache: %v", err)
 	}
 
 	// Try to load - should return nil due to expiration
@@ -222,7 +248,8 @@ func TestCacheManager_CacheExpiration(t *testing.T) {
 	}
 
 	if loaded != nil {
-		t.Error("Expected nil for expired cache, got cache data")
+		t.Errorf("Expected nil for expired cache, got cache data. LastChecked: %v, Time since: %v", 
+			loaded.LastChecked, time.Since(loaded.LastChecked))
 	}
 }
 
