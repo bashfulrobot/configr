@@ -1,0 +1,56 @@
+version: "1.0"
+
+# Binary Management Example
+# This configuration demonstrates how to download and deploy static binaries
+# from remote git repositories (GitHub, GitLab, etc.)
+
+binaries:
+  # Example: Hugo static site generator
+  hugo:
+    source: "https://github.com/gohugoio/hugo/releases/download/v0.123.0/hugo_extended_0.123.0_linux-amd64.tar.gz"
+    destination: "/usr/local/bin/hugo"
+    mode: "755"
+    owner: "root"
+    group: "root"
+    backup: true
+    interactive: false
+
+  # Example: GitHub CLI tool
+  gh:
+    source: "https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_amd64.tar.gz"
+    destination: "/usr/local/bin/gh"
+    mode: "755"
+    backup: true
+
+  # Example: Personal binary in user's bin directory
+  custom-tool:
+    source: "https://github.com/user/custom-tool/releases/download/v1.0.0/custom-tool-linux"
+    destination: "~/bin/custom-tool"
+    mode: "755"
+    interactive: true  # Enable interactive conflict resolution
+    prompt_permissions: true
+
+  # Example: System utility
+  dive:
+    source: "https://github.com/wagoodman/dive/releases/download/v0.11.0/dive_0.11.0_linux_amd64.tar.gz"
+    destination: "/usr/local/bin/dive"
+    mode: "755"
+    owner: "root"
+    group: "root"
+
+# You can combine binary management with other configr features
+files:
+  config:
+    source: "sample-dotfiles/config.txt"
+    destination: "~/.config/myapp/config"
+    backup: true
+
+packages:
+  apt:
+    - curl    # Required for downloading binaries
+    - wget    # Alternative download tool
+    - tar     # For extracting compressed binaries
+
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/color-scheme": "'prefer-dark'"

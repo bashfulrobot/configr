@@ -1,0 +1,106 @@
+version: "1.0"
+
+# Developer Workstation Configuration
+# Complete setup including packages, binaries, files, and desktop settings
+
+# Package manager defaults
+package_defaults:
+  apt: ["-y", "--no-install-recommends"]
+  flatpak: ["--system", "--assumeyes"]
+
+# Repositories
+repositories:
+  apt:
+    docker:
+      uri: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+      key: "https://download.docker.com/linux/ubuntu/gpg"
+
+# Packages
+packages:
+  apt:
+    - git
+    - curl
+    - wget
+    - build-essential
+    - docker-ce
+    - vim
+    - zsh
+  flatpak:
+    - org.mozilla.Firefox
+    - com.visualstudio.code
+  snap:
+    - discord
+
+# Binaries from remote repositories
+binaries:
+  # Go programming language
+  go:
+    source: "https://go.dev/dl/go1.21.5.linux-amd64.tar.gz"
+    destination: "/usr/local/bin/go"
+    mode: "755"
+    owner: "root"
+    group: "root"
+    backup: true
+
+  # Docker Compose
+  docker-compose:
+    source: "https://github.com/docker/compose/releases/download/v2.23.0/docker-compose-linux-x86_64"
+    destination: "/usr/local/bin/docker-compose"
+    mode: "755"
+    owner: "root"
+    group: "root"
+
+  # Terraform
+  terraform:
+    source: "https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip"
+    destination: "/usr/local/bin/terraform"
+    mode: "755"
+    backup: true
+
+  # kubectl
+  kubectl:
+    source: "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+    destination: "/usr/local/bin/kubectl"
+    mode: "755"
+    owner: "root"
+    group: "root"
+
+  # Personal development tools
+  my-script:
+    source: "https://github.com/myuser/dev-tools/releases/download/v1.0/dev-script"
+    destination: "~/bin/dev-script"
+    mode: "755"
+    interactive: true
+    prompt_permissions: true
+
+# Configuration files
+files:
+  vimrc:
+    source: "dotfiles/.vimrc"
+    destination: "~/.vimrc"
+    backup: true
+
+  gitconfig:
+    source: "dotfiles/.gitconfig"
+    destination: "~/.gitconfig"
+    backup: true
+
+  zshrc:
+    source: "dotfiles/.zshrc"
+    destination: "~/.zshrc"
+    backup: true
+
+  ssh-config:
+    source: "dotfiles/ssh-config"
+    destination: "~/.ssh/config"
+    mode: "600"
+    backup: true
+
+# Desktop settings
+dconf:
+  settings:
+    "/org/gnome/desktop/interface/color-scheme": "'prefer-dark'"
+    "/org/gnome/desktop/interface/gtk-theme": "'Adwaita-dark'"
+    "/org/gnome/desktop/wm/preferences/button-layout": "'close,minimize,maximize:'"
+    "/org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9/background-color": "'rgb(23,20,33)'"
+    "/org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9/foreground-color": "'rgb(208,207,204)'"
