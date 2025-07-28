@@ -260,13 +260,30 @@ func (ux *UXManager) ShowSpinner(message string) (*tea.Program, chan string, cha
 	
 	// Start the program in a goroutine
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Silently handle panics to prevent crashes
+			}
+		}()
 		if _, err := p.Run(); err != nil {
-			ux.logger.Error("Spinner error", "error", err)
+			// Only log errors that aren't due to normal program termination or TTY issues
+			errStr := err.Error()
+			if errStr != "program was killed" && 
+			   errStr != "context canceled" && 
+			   !strings.Contains(errStr, "could not open a new TTY") &&
+			   !strings.Contains(errStr, "no such device or address") {
+				ux.logger.Error("Spinner error", "error", err)
+			}
 		}
 	}()
 	
 	// Handle updates
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Silently handle panics to prevent crashes
+			}
+		}()
 		for {
 			select {
 			case msg := <-updateChan:
@@ -283,17 +300,7 @@ func (ux *UXManager) ShowSpinner(message string) (*tea.Program, chan string, cha
 
 // ShowValidationSpinner displays a spinner specifically for validation operations
 func (ux *UXManager) ShowValidationSpinner() (*tea.Program, chan SpinnerDoneMsg) {
-	_, _, doneChan := ux.ShowSpinner("Validating configuration...")
-	p, _, doneChan2 := ux.ShowSpinner("Validating configuration...")
-	
-	// Merge channels for simplified interface
-	go func() {
-		select {
-		case msg := <-doneChan2:
-			doneChan <- msg
-		}
-	}()
-	
+	p, _, doneChan := ux.ShowSpinner("Validating configuration...")
 	return p, doneChan
 }
 
@@ -309,17 +316,7 @@ func (ux *UXManager) ShowConfigLoadSpinner(optimized bool) (*tea.Program, chan S
 	if optimized {
 		message = "Loading configuration (optimized)..."
 	}
-	_, _, doneChan := ux.ShowSpinner(message)
-	p, _, doneChan2 := ux.ShowSpinner(message)
-	
-	// Merge channels for simplified interface
-	go func() {
-		select {
-		case msg := <-doneChan2:
-			doneChan <- msg
-		}
-	}()
-	
+	p, _, doneChan := ux.ShowSpinner(message)
 	return p, doneChan
 }
 
