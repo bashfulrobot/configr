@@ -81,6 +81,7 @@ func Validate(config *Config, configPath string) *ValidationResult {
 		validateRepositories(config, result, nil, configPath)
 		validatePackages(config, result, nil, configPath)
 		validateFiles(config, configPath, result, nil, configPath)
+		validateBinaries(config, result, nil, configPath)
 		validateDConf(config, result, nil, configPath)
 		return result
 	}
@@ -91,6 +92,7 @@ func Validate(config *Config, configPath string) *ValidationResult {
 	validateRepositories(config, result, configWithPos, configPath)
 	validatePackages(config, result, configWithPos, configPath)
 	validateFiles(config, configPath, result, configWithPos, configPath)
+	validateBinaries(config, result, configWithPos, configPath)
 	validateDConf(config, result, configWithPos, configPath)
 	
 	return result
@@ -497,6 +499,115 @@ func validateFiles(config *Config, configPath string, result *ValidationResult, 
 				Message: "destination path contains '..' which is not allowed",
 				Help:    "use absolute paths or paths relative to home (~)",
 				Note:    "this prevents accidental file overwrites outside intended directories",
+			})
+		}
+	}
+}
+
+// validateBinaries checks binary configurations
+func validateBinaries(config *Config, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
+	for name, binary := range config.Binaries {
+		fieldPrefix := fmt.Sprintf("binaries.%s", name)
+		
+		// Validate required fields
+		if binary.Source == "" {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "missing source URL",
+				Field:   fieldPrefix + ".source",
+				Message: "source URL is required for binary download",
+				Help:    "specify the HTTPS URL to download the binary from",
+				Note:    "only HTTPS URLs are allowed for security",
+			})
+			continue
+		}
+		
+		if binary.Destination == "" {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "missing destination path",
+				Field:   fieldPrefix + ".destination",
+				Message: "destination path is required", 
+				Help:    "specify where the binary should be placed",
+				Note:    "use paths like /usr/local/bin/mybinary or ~/bin/mybinary",
+			})
+			continue
+		}
+		
+		// Validate source URL format and security
+		if !strings.HasPrefix(binary.Source, "https://") {
+			result.Add(ValidationError{
+				Type:       "error",
+				Title:      "insecure source URL",
+				Field:      fieldPrefix + ".source",
+				Value:      binary.Source,
+				Message:    "source URL must use HTTPS for security",
+				Help:       "change http:// to https://",
+				Suggestion: fmt.Sprintf("source: \"%s\"", strings.Replace(binary.Source, "http://", "https://", 1)),
+			})
+		}
+		
+		// Basic URL format validation
+		if !isValidURL(binary.Source) {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "invalid URL format",
+				Field:   fieldPrefix + ".source",
+				Value:   binary.Source,
+				Message: "source URL format is invalid",
+				Help:    "ensure the URL is properly formatted",
+				Note:    "example: https://github.com/user/repo/releases/download/v1.0.0/binary",
+			})
+		}
+		
+		// Validate binary mode if provided
+		if binary.Mode != "" {
+			if !isValidFileMode(binary.Mode) {
+				result.Add(ValidationError{
+					Type:       "error",
+					Title:      "invalid file mode",
+					Field:      fieldPrefix + ".mode",
+					Value:      binary.Mode,
+					Message:    "file mode must be valid octal (e.g., '755', '644')",
+					Help:       "use '755' for executables, '644' for non-executables",
+					Suggestion: "mode: \"755\"",
+				})
+			} else if !isExecutableMode(binary.Mode) {
+				result.Add(ValidationError{
+					Type:    "warning",
+					Title:   "non-executable binary mode",
+					Field:   fieldPrefix + ".mode",
+					Value:   binary.Mode,
+					Message: "binary file mode should typically be executable",
+					Help:    "consider using '755' for executable binaries",
+					Note:    "binaries usually need execute permissions to run",
+				})
+			}
+		}
+		
+		// Validate destination path
+		if strings.Contains(binary.Destination, "..") {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "unsafe destination path",
+				Field:   fieldPrefix + ".destination",
+				Value:   binary.Destination,
+				Message: "destination path contains '..' which is not allowed",
+				Help:    "use absolute paths or paths relative to home (~)",
+				Note:    "this prevents accidental binary overwrites outside intended directories",
+			})
+		}
+		
+		// Warn about non-standard binary locations
+		if !isStandardBinaryLocation(binary.Destination) {
+			result.Add(ValidationError{
+				Type:    "warning",
+				Title:   "non-standard binary location",
+				Field:   fieldPrefix + ".destination",
+				Value:   binary.Destination,
+				Message: "binary is not being placed in a standard PATH location",
+				Help:    "consider using /usr/local/bin/, ~/bin/, or ~/.local/bin/",
+				Note:    "binaries outside PATH may not be easily accessible",
 			})
 		}
 	}
@@ -951,4 +1062,60 @@ func suggestFlatpakRemoteName(name string) string {
 	}
 	
 	return ""
+}
+
+// isValidURL validates basic URL format
+func isValidURL(url string) bool {
+	// Basic URL validation - must contain valid scheme and host
+	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
+		return false
+	}
+	
+	// Must have something after the scheme
+	stripped := strings.TrimPrefix(url, "https://")
+	stripped = strings.TrimPrefix(stripped, "http://")
+	
+	// Must contain at least a domain
+	if len(stripped) < 3 || !strings.Contains(stripped, ".") {
+		return false
+	}
+	
+	return true
+}
+
+// isExecutableMode checks if a file mode includes execute permissions
+func isExecutableMode(mode string) bool {
+	if len(mode) < 3 {
+		return false
+	}
+	
+	// Check if any of the execute bits are set (user, group, or other)
+	// For octal: 1=execute, 2=write, 4=read
+	// So modes ending in 1, 3, 5, 7 have execute for owner
+	// Modes with 1 in middle position have execute for group
+	// Modes with 1 in last position have execute for other
+	lastChar := mode[len(mode)-1:]
+	return lastChar == "1" || lastChar == "3" || lastChar == "5" || lastChar == "7"
+}
+
+// isStandardBinaryLocation checks if the destination is in a standard PATH location
+func isStandardBinaryLocation(destination string) bool {
+	standardPaths := []string{
+		"/usr/bin/",
+		"/usr/local/bin/",
+		"/bin/",
+		"/sbin/",
+		"/usr/sbin/",
+		"/usr/local/sbin/",
+		"~/bin/",
+		"~/.local/bin/",
+	}
+	
+	for _, path := range standardPaths {
+		if strings.HasPrefix(destination, path) {
+			return true
+		}
+	}
+	
+	return false
 }
