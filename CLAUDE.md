@@ -20,12 +20,13 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - Snap package management (package installation with naming convention validation)
 - Package removal system (removes packages when removed from configuration)
 - File removal system (removes files/dotfiles when removed from configuration)
+- Binary management system (download and deploy from remote git repositories with HTTPS)
 - Repository management (APT PPAs/custom repos + Flatpak remotes)
 - File management system (symlink/copy modes with backup)
 - DConf configuration management (desktop settings for any dconf-using application)
 - Configuration validation with Rust-style error reporting
 - Three-tier package flag system
-- State tracking and management for package and file removal
+- State tracking and management for package, file, and binary removal
 - Configuration and system state caching for performance optimization
 - Professional CLI with charmbracelet/fang integration
 - Comprehensive test coverage (170+ tests)
@@ -114,6 +115,11 @@ files:             # Unified file management
     source: "path"
     destination: "path"
     # Optional: owner, group, mode, backup, copy
+binaries:          # Binary management (download and deploy from remote repositories)
+  name:
+    source: "https://..."
+    destination: "/usr/local/bin/binary"
+    # Optional: owner, group, mode, backup, interactive
 dconf:             # DConf settings for any dconf-using application
   settings:
     "/path/to/setting": "'value'"
@@ -162,6 +168,22 @@ files:
     interactive: true                # Optional: enable interactive conflict resolution
     prompt_permissions: true         # Optional: prompt for permission changes
     prompt_ownership: true           # Optional: prompt for ownership changes
+```
+
+**Binary Management Schema:**
+
+```yaml
+binaries:
+  binary_name:
+    source: "https://github.com/user/repo/releases/download/v1.0.0/binary"  # Required: HTTPS URL to download binary
+    destination: "/usr/local/bin/binary"     # Required: where to place the binary (typically in PATH)
+    owner: "root"                            # Optional: file owner (preserves if omitted)
+    group: "root"                            # Optional: file group (preserves if omitted)
+    mode: "755"                              # Optional: file permissions (default: 755 for binaries)
+    backup: true                             # Optional: backup existing binary before replacing
+    interactive: true                        # Optional: enable interactive conflict resolution
+    prompt_permissions: true                 # Optional: prompt for permission changes
+    prompt_ownership: true                   # Optional: prompt for ownership changes
 ```
 
 ### Command Interface (CLI Design)
