@@ -35,6 +35,13 @@ func TestValidate_ValidConfig(t *testing.T) {
 				Backup:      true,
 			},
 		},
+		Binaries: map[string]Binary{
+			"test-tool": {
+				Source:      "https://github.com/user/repo/releases/download/v1.0.0/tool",
+				Destination: "/usr/local/bin/tool",
+				Mode:        "755",
+			},
+		},
 		DConf: DConfConfig{
 			Settings: map[string]string{
 				"/test/setting": "'value'",
@@ -1224,6 +1231,127 @@ func TestValidate_DConfEnhancedValidation(t *testing.T) {
 				DConf: DConfConfig{
 					Settings: tt.settings,
 				},
+			}
+			
+			result := Validate(config, "config.yaml")
+			
+			if tt.shouldError {
+				if !result.HasErrors() {
+					t.Errorf("validation should fail for %s", tt.name)
+					return
+				}
+				
+				found := false
+				for _, err := range result.Errors {
+					if strings.Contains(err.Title, tt.errorTitle) {
+						found = true
+						break
+					}
+				}
+				
+				if !found {
+					t.Errorf("expected error message containing '%s', got errors: %v", tt.errorTitle, result.Errors)
+				}
+			} else {
+				if result.HasErrors() {
+					t.Errorf("validation should pass for %s, got errors: %v", tt.name, result.Errors)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateBinaries(t *testing.T) {
+	tests := []struct {
+		name        string
+		binaries    map[string]Binary
+		shouldError bool
+		errorTitle  string
+	}{
+		{
+			name: "valid binary config",
+			binaries: map[string]Binary{
+				"hugo": {
+					Source:      "https://github.com/gohugoio/hugo/releases/download/v0.123.0/hugo_linux-amd64.tar.gz",
+					Destination: "/usr/local/bin/hugo",
+					Mode:        "755",
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "missing source URL",
+			binaries: map[string]Binary{
+				"tool": {
+					Destination: "/usr/local/bin/tool",
+					Mode:        "755",
+				},
+			},
+			shouldError: true,
+			errorTitle:  "missing source URL",
+		},
+		{
+			name: "missing destination",
+			binaries: map[string]Binary{
+				"tool": {
+					Source: "https://example.com/tool",
+				},
+			},
+			shouldError: true,
+			errorTitle:  "missing destination path",
+		},
+		{
+			name: "insecure HTTP URL",
+			binaries: map[string]Binary{
+				"tool": {
+					Source:      "http://example.com/tool",
+					Destination: "/usr/local/bin/tool",
+				},
+			},
+			shouldError: true,
+			errorTitle:  "insecure source URL",
+		},
+		{
+			name: "invalid URL format",
+			binaries: map[string]Binary{
+				"tool": {
+					Source:      "not-a-url",
+					Destination: "/usr/local/bin/tool",
+				},
+			},
+			shouldError: true,
+			errorTitle:  "invalid URL format",
+		},
+		{
+			name: "invalid file mode",
+			binaries: map[string]Binary{
+				"tool": {
+					Source:      "https://example.com/tool",
+					Destination: "/usr/local/bin/tool",
+					Mode:        "999",
+				},
+			},
+			shouldError: true,
+			errorTitle:  "invalid file mode",
+		},
+		{
+			name: "unsafe destination path",
+			binaries: map[string]Binary{
+				"tool": {
+					Source:      "https://example.com/tool",
+					Destination: "../../../etc/passwd",
+				},
+			},
+			shouldError: true,
+			errorTitle:  "unsafe destination path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Version:  "1.0",
+				Binaries: tt.binaries,
 			}
 			
 			result := Validate(config, "config.yaml")

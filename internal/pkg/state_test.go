@@ -515,3 +515,360 @@ func stringSlicesEqualUnordered(a, b []string) bool {
 
 	return true
 }
+
+// Tests for binary state tracking
+func TestStateManager_BinaryStateTracking(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	logger := log.New(os.Stderr)
+	sm := NewStateManagerWithPath(logger, statePath)
+
+	// Create test configuration with binaries
+	cfg := &config.Config{
+		Version: "1.0",
+		Binaries: map[string]config.Binary{
+			"hugo": {
+				Source:      "https://github.com/gohugoio/hugo/releases/download/v0.120.0/hugo_linux.tar.gz",
+				Destination: "/usr/local/bin/hugo",
+				Mode:        "755",
+			},
+			"gh": {
+				Source:      "https://github.com/cli/cli/releases/download/v2.40.0/gh_linux.tar.gz",
+				Destination: "/usr/local/bin/gh",
+				Mode:        "755",
+			},
+		},
+	}
+
+	// Create deployed binaries list
+	deployedBinaries := []ManagedBinary{
+		{
+			Name:        "hugo",
+			Destination: "/usr/local/bin/hugo",
+		},
+		{
+			Name:        "gh",
+			Destination: "/usr/local/bin/gh",
+		},
+	}
+
+	// Update state with binaries
+	err := sm.UpdateStateWithBinaries(cfg, []ManagedFile{}, deployedBinaries)
+	if err != nil {
+		t.Fatalf("UpdateStateWithBinaries() failed: %v", err)
+	}
+
+	// Load state and verify binaries were saved
+	state, err := sm.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState() failed: %v", err)
+	}
+
+	if len(state.Binaries) != 2 {
+		t.Errorf("Expected 2 binaries in state, got %d", len(state.Binaries))
+	}
+
+	// Verify binary details
+	binaryNames := make(map[string]bool)
+	for _, binary := range state.Binaries {
+		binaryNames[binary.Name] = true
+	}
+
+	if !binaryNames["hugo"] || !binaryNames["gh"] {
+		t.Errorf("Expected binaries 'hugo' and 'gh' in state, got: %v", state.Binaries)
+	}
+}
+
+func TestStateManager_GetBinariesToRemove(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	logger := log.New(os.Stderr)
+	sm := NewStateManagerWithPath(logger, statePath)
+
+	// Create initial state with 3 binaries
+	initialState := &PackageState{
+		Version:     "1.0",
+		LastUpdated: time.Now(),
+		Packages:    ManagedPackages{},
+		Files:       []ManagedFile{},
+		Binaries: []ManagedBinary{
+			{Name: "hugo", Destination: "/usr/local/bin/hugo"},
+			{Name: "gh", Destination: "/usr/local/bin/gh"},
+			{Name: "dive", Destination: "/usr/local/bin/dive"},
+		},
+	}
+
+	// Save initial state
+	if err := sm.SaveState(initialState); err != nil {
+		t.Fatalf("SaveState() failed: %v", err)
+	}
+
+	// Create new configuration with only 2 binaries (removing 'dive')
+	newCfg := &config.Config{
+		Binaries: map[string]config.Binary{
+			"hugo": {
+				Source:      "https://github.com/gohugoio/hugo/releases/download/v0.120.0/hugo_linux.tar.gz",
+				Destination: "/usr/local/bin/hugo",
+			},
+			"gh": {
+				Source:      "https://github.com/cli/cli/releases/download/v2.40.0/gh_linux.tar.gz",
+				Destination: "/usr/local/bin/gh",
+			},
+		},
+	}
+
+	// Get binaries to remove
+	toRemove, err := sm.GetBinariesToRemove(newCfg)
+	if err != nil {
+		t.Fatalf("GetBinariesToRemove() failed: %v", err)
+	}
+
+	// Should have 1 binary to remove ('dive')
+	if len(toRemove) != 1 {
+		t.Errorf("Expected 1 binary to remove, got %d", len(toRemove))
+	}
+
+	if len(toRemove) > 0 && toRemove[0].Name != "dive" {
+		t.Errorf("Expected to remove 'dive', got '%s'", toRemove[0].Name)
+	}
+}
+
+func TestStateManager_GetBinariesToRemove_NoBinariesInState(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	logger := log.New(os.Stderr)
+	sm := NewStateManagerWithPath(logger, statePath)
+
+	// Create configuration with binaries
+	cfg := &config.Config{
+		Binaries: map[string]config.Binary{
+			"hugo": {
+				Source:      "https://github.com/gohugoio/hugo/releases/download/v0.120.0/hugo_linux.tar.gz",
+				Destination: "/usr/local/bin/hugo",
+			},
+		},
+	}
+
+	// Get binaries to remove (should be empty since state is empty)
+	toRemove, err := sm.GetBinariesToRemove(cfg)
+	if err != nil {
+		t.Fatalf("GetBinariesToRemove() failed: %v", err)
+	}
+
+	if len(toRemove) != 0 {
+		t.Errorf("Expected 0 binaries to remove from empty state, got %d", len(toRemove))
+	}
+}
+
+func TestStateManager_GetBinariesToRemove_AllBinariesRemoved(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	logger := log.New(os.Stderr)
+	sm := NewStateManagerWithPath(logger, statePath)
+
+	// Create initial state with binaries
+	initialState := &PackageState{
+		Version:     "1.0",
+		LastUpdated: time.Now(),
+		Packages:    ManagedPackages{},
+		Files:       []ManagedFile{},
+		Binaries: []ManagedBinary{
+			{Name: "hugo", Destination: "/usr/local/bin/hugo"},
+			{Name: "gh", Destination: "/usr/local/bin/gh"},
+		},
+	}
+
+	// Save initial state
+	if err := sm.SaveState(initialState); err != nil {
+		t.Fatalf("SaveState() failed: %v", err)
+	}
+
+	// Create configuration with no binaries
+	emptyCfg := &config.Config{
+		Binaries: map[string]config.Binary{},
+	}
+
+	// Get binaries to remove (should be all binaries from state)
+	toRemove, err := sm.GetBinariesToRemove(emptyCfg)
+	if err != nil {
+		t.Fatalf("GetBinariesToRemove() failed: %v", err)
+	}
+
+	// Should remove all 2 binaries
+	if len(toRemove) != 2 {
+		t.Errorf("Expected 2 binaries to remove, got %d", len(toRemove))
+	}
+
+	// Verify the correct binaries are marked for removal
+	binaryNames := make(map[string]bool)
+	for _, binary := range toRemove {
+		binaryNames[binary.Name] = true
+	}
+
+	if !binaryNames["hugo"] || !binaryNames["gh"] {
+		t.Errorf("Expected to remove 'hugo' and 'gh', got: %v", toRemove)
+	}
+}
+
+func TestStateManager_BinaryStateUpdate_EmptyDeployment(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	logger := log.New(os.Stderr)
+	sm := NewStateManagerWithPath(logger, statePath)
+
+	// Create configuration with binaries
+	cfg := &config.Config{
+		Binaries: map[string]config.Binary{
+			"hugo": {
+				Source:      "https://github.com/gohugoio/hugo/releases/download/v0.120.0/hugo_linux.tar.gz",
+				Destination: "/usr/local/bin/hugo",
+			},
+		},
+	}
+
+	// Update state with empty deployed binaries list
+	err := sm.UpdateStateWithBinaries(cfg, []ManagedFile{}, []ManagedBinary{})
+	if err != nil {
+		t.Fatalf("UpdateStateWithBinaries() failed: %v", err)
+	}
+
+	// Load state and verify no binaries were saved
+	state, err := sm.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState() failed: %v", err)
+	}
+
+	if len(state.Binaries) != 0 {
+		t.Errorf("Expected 0 binaries in state with empty deployment, got %d", len(state.Binaries))
+	}
+}
+
+func TestStateManager_BinaryStateUpdate_PartialDeployment(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	logger := log.New(os.Stderr)
+	sm := NewStateManagerWithPath(logger, statePath)
+
+	// Create configuration with 2 binaries
+	cfg := &config.Config{
+		Binaries: map[string]config.Binary{
+			"hugo": {
+				Source:      "https://github.com/gohugoio/hugo/releases/download/v0.120.0/hugo_linux.tar.gz",
+				Destination: "/usr/local/bin/hugo",
+			},
+			"gh": {
+				Source:      "https://github.com/cli/cli/releases/download/v2.40.0/gh_linux.tar.gz",
+				Destination: "/usr/local/bin/gh",
+			},
+		},
+	}
+
+	// Only deploy one binary (partial deployment)
+	deployedBinaries := []ManagedBinary{
+		{
+			Name:        "hugo",
+			Destination: "/usr/local/bin/hugo",
+		},
+	}
+
+	// Update state with partial deployment
+	err := sm.UpdateStateWithBinaries(cfg, []ManagedFile{}, deployedBinaries)
+	if err != nil {
+		t.Fatalf("UpdateStateWithBinaries() failed: %v", err)
+	}
+
+	// Load state and verify only deployed binary was saved
+	state, err := sm.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState() failed: %v", err)
+	}
+
+	if len(state.Binaries) != 1 {
+		t.Errorf("Expected 1 binary in state with partial deployment, got %d", len(state.Binaries))
+	}
+
+	if len(state.Binaries) > 0 && state.Binaries[0].Name != "hugo" {
+		t.Errorf("Expected 'hugo' in state, got '%s'", state.Binaries[0].Name)
+	}
+}
+
+func TestStateManager_BinaryStateUpdate_UpdateExisting(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	logger := log.New(os.Stderr)
+	sm := NewStateManagerWithPath(logger, statePath)
+
+	// Create initial state with one binary
+	initialState := &PackageState{
+		Version:     "1.0",
+		LastUpdated: time.Now().Add(-time.Hour), // Hour ago
+		Packages:    ManagedPackages{},
+		Files:       []ManagedFile{},
+		Binaries: []ManagedBinary{
+			{Name: "hugo", Destination: "/usr/local/bin/hugo"},
+		},
+	}
+
+	// Save initial state
+	if err := sm.SaveState(initialState); err != nil {
+		t.Fatalf("SaveState() failed: %v", err)
+	}
+
+	// Create configuration with different binary set
+	cfg := &config.Config{
+		Binaries: map[string]config.Binary{
+			"gh": {
+				Source:      "https://github.com/cli/cli/releases/download/v2.40.0/gh_linux.tar.gz",
+				Destination: "/usr/local/bin/gh",
+			},
+		},
+	}
+
+	// Deploy the new binary
+	deployedBinaries := []ManagedBinary{
+		{
+			Name:        "gh",
+			Destination: "/usr/local/bin/gh",
+		},
+	}
+
+	// Update state with new deployment
+	err := sm.UpdateStateWithBinaries(cfg, []ManagedFile{}, deployedBinaries)
+	if err != nil {
+		t.Fatalf("UpdateStateWithBinaries() failed: %v", err)
+	}
+
+	// Load state and verify it was updated
+	state, err := sm.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState() failed: %v", err)
+	}
+
+	// Should have the new binary, not the old one
+	if len(state.Binaries) != 1 {
+		t.Errorf("Expected 1 binary in updated state, got %d", len(state.Binaries))
+	}
+
+	if len(state.Binaries) > 0 && state.Binaries[0].Name != "gh" {
+		t.Errorf("Expected 'gh' in updated state, got '%s'", state.Binaries[0].Name)
+	}
+
+	// Verify timestamp was updated
+	if !state.LastUpdated.After(initialState.LastUpdated) {
+		t.Error("State timestamp should be updated after binary deployment")
+	}
+}

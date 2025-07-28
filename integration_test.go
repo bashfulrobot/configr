@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -640,5 +641,259 @@ files:
 	outputStr := string(output)
 	if !strings.Contains(outputStr, "interactive") && !strings.Contains(outputStr, "dry-run") {
 		t.Logf("Interactive mode test - output: %s", outputStr)
+	}
+}
+
+func TestIntegration_BinaryManagement_Validation(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Test valid binary configuration
+	validConfig := `version: "1.0"
+binaries:
+  test-tool:
+    source: "https://github.com/user/repo/releases/download/v1.0.0/tool"
+    destination: "/usr/local/bin/tool"
+    mode: "755"
+    backup: true
+`
+	
+	configPath := filepath.Join(tempDir, "valid-binary.yaml")
+	err := os.WriteFile(configPath, []byte(validConfig), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run validate command
+	cmd := exec.Command(binaryPath, "validate", configPath)
+	cmd.Dir = tempDir
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		t.Fatalf("validation should pass for valid binary config, got error: %v, output: %s", err, string(output))
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "✓") && !strings.Contains(outputStr, "valid") {
+		t.Logf("Validation output: %s", outputStr)
+	}
+}
+
+func TestIntegration_BinaryManagement_InvalidConfig(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Test invalid binary configuration (HTTP URL)
+	invalidConfig := `version: "1.0"
+binaries:
+  insecure-tool:
+    source: "http://example.com/tool"
+    destination: "/usr/local/bin/tool"
+    mode: "755"
+`
+	
+	configPath := filepath.Join(tempDir, "invalid-binary.yaml")
+	err := os.WriteFile(configPath, []byte(invalidConfig), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run validate command
+	cmd := exec.Command(binaryPath, "validate", configPath)
+	cmd.Dir = tempDir
+	output, err := cmd.CombinedOutput()
+	
+	// Should fail validation
+	if err == nil {
+		t.Fatalf("validation should fail for insecure HTTP URL in binary config")
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "insecure") && !strings.Contains(outputStr, "error") {
+		t.Errorf("expected validation error message about insecure URL, got: %s", outputStr)
+	}
+}
+
+func TestIntegration_BinaryManagement_DryRun(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Create a temporary directory for binary destinations
+	binDir := filepath.Join(tempDir, "bin")
+	err := os.MkdirAll(binDir, 0755)
+	if err != nil {
+		t.Fatalf("failed to create bin directory: %v", err)
+	}
+
+	// Test binary configuration with dry run
+	dryRunConfig := fmt.Sprintf(`version: "1.0"
+binaries:
+  hugo:
+    source: "https://github.com/gohugoio/hugo/releases/download/v0.120.0/hugo_extended_0.120.0_linux-amd64.tar.gz"
+    destination: "%s/hugo"
+    mode: "755"
+    backup: true
+  gh:
+    source: "https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_amd64.tar.gz"
+    destination: "%s/gh"
+    mode: "755"
+`, binDir, binDir)
+	
+	configPath := filepath.Join(tempDir, "binary-dryrun.yaml")
+	err = os.WriteFile(configPath, []byte(dryRunConfig), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run apply command with dry-run
+	cmd := exec.Command(binaryPath, "apply", configPath, "--dry-run")
+	cmd.Dir = tempDir
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		t.Fatalf("dry-run should not fail for binary config, got error: %v, output: %s", err, string(output))
+	}
+	
+	outputStr := string(output)
+	// Check for dry-run indicators
+	if !strings.Contains(outputStr, "dry-run") && !strings.Contains(outputStr, "would") {
+		t.Logf("Dry-run binary management output: %s", outputStr)
+	}
+	
+	// Verify no actual files were created in test directories (dry-run mode)
+	testPaths := []string{filepath.Join(binDir, "hugo"), filepath.Join(binDir, "gh")}
+	for _, path := range testPaths {
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("dry-run should not create actual files: %s", path)
+		}
+	}
+}
+
+func TestIntegration_BinaryManagement_HomeDirectory(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Create a temporary "home" directory for testing
+	homeDir := filepath.Join(tempDir, "home")
+	err := os.MkdirAll(filepath.Join(homeDir, "bin"), 0755)
+	if err != nil {
+		t.Fatalf("failed to create test home directory: %v", err)
+	}
+	
+	// Test binary configuration targeting home directory
+	homeConfig := `version: "1.0"
+binaries:
+  local-tool:
+    source: "https://github.com/user/tool/releases/download/v1.0.0/tool"
+    destination: "~/bin/local-tool"
+    mode: "755"
+    backup: true
+`
+	
+	configPath := filepath.Join(tempDir, "binary-home.yaml")
+	err = os.WriteFile(configPath, []byte(homeConfig), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run validate command (should pass)
+	cmd := exec.Command(binaryPath, "validate", configPath)
+	cmd.Dir = tempDir
+	// Set HOME to our temporary directory
+	cmd.Env = append(os.Environ(), "HOME="+homeDir)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		t.Fatalf("validation should pass for home directory binary config, got error: %v, output: %s", err, string(output))
+	}
+	
+	// Run dry-run apply
+	cmd = exec.Command(binaryPath, "apply", configPath, "--dry-run")
+	cmd.Dir = tempDir
+	cmd.Env = append(os.Environ(), "HOME="+homeDir)
+	output, err = cmd.CombinedOutput()
+	
+	if err != nil {
+		t.Fatalf("dry-run should pass for home directory binary config, got error: %v, output: %s", err, string(output))
+	}
+}
+
+func TestIntegration_BinaryManagement_MissingFields(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Test binary configuration with missing required fields
+	incompleteConfig := `version: "1.0"
+binaries:
+  incomplete-tool:
+    source: "https://github.com/user/repo/releases/download/v1.0.0/tool"
+    # destination missing
+    mode: "755"
+`
+	
+	configPath := filepath.Join(tempDir, "incomplete-binary.yaml")
+	err := os.WriteFile(configPath, []byte(incompleteConfig), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run validate command (should fail)
+	cmd := exec.Command(binaryPath, "validate", configPath)
+	cmd.Dir = tempDir
+	output, err := cmd.CombinedOutput()
+	
+	if err == nil {
+		t.Fatalf("validation should fail for binary config missing destination")
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "destination") && !strings.Contains(outputStr, "missing") {
+		t.Errorf("expected validation error about missing destination, got: %s", outputStr)
+	}
+}
+
+func TestIntegration_BinaryManagement_InvalidPermissions(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Test binary configuration with invalid file mode
+	invalidModeConfig := `version: "1.0"  
+binaries:
+  bad-permissions:
+    source: "https://github.com/user/repo/releases/download/v1.0.0/tool"
+    destination: "/usr/local/bin/tool"
+    mode: "999"  # Invalid octal mode
+`
+	
+	configPath := filepath.Join(tempDir, "invalid-mode.yaml")
+	err := os.WriteFile(configPath, []byte(invalidModeConfig), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run validate command (should fail)
+	cmd := exec.Command(binaryPath, "validate", configPath)
+	cmd.Dir = tempDir
+	output, err := cmd.CombinedOutput()
+	
+	if err == nil {
+		t.Fatalf("validation should fail for binary config with invalid file mode")
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "mode") && !strings.Contains(outputStr, "invalid") {
+		t.Errorf("expected validation error about invalid file mode, got: %s", outputStr)
 	}
 }
