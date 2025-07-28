@@ -897,3 +897,130 @@ binaries:
 		t.Errorf("expected validation error about invalid file mode, got: %s", outputStr)
 	}
 }
+
+func TestIntegration_DEB822RepositoryValidation(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Test valid DEB822 repository configuration
+	validDEB822Config := `version: "1.0"
+repositories:
+  apt:
+    vscode:
+      uris: ["https://packages.microsoft.com/repos/code"]
+      suites: ["stable"]
+      components: ["main"]
+      types: ["deb"]
+      architectures: ["amd64", "arm64"]
+      key_url: "https://packages.microsoft.com/keys/microsoft.asc"
+      signed_by: "/usr/share/keyrings/vscode.gpg"
+    chrome:
+      uris: ["https://dl.google.com/linux/chrome/deb/"]
+      suites: ["stable"]
+      components: ["main"]
+      key_id: "0xEB4C1BFD4F042F6DDDCCEC917721F63BD38B4796"
+      signed_by: "/usr/share/keyrings/chrome.gpg"
+packages:
+  apt:
+    - curl
+`
+	
+	configPath := filepath.Join(tempDir, "deb822-valid.yaml")
+	err := os.WriteFile(configPath, []byte(validDEB822Config), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run validate command (should succeed)
+	cmd := exec.Command(binaryPath, "validate", configPath)
+	cmd.Dir = tempDir
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		t.Errorf("validation should succeed for valid DEB822 config, got error: %v\nOutput: %s", err, string(output))
+	}
+	
+	// Test invalid DEB822 repository configuration
+	invalidDEB822Config := `version: "1.0"
+repositories:
+  apt:
+    invalid:
+      uris: ["https://example.com/repo"]
+      # Missing required suites and components fields
+packages:
+  apt:
+    - curl
+`
+	
+	invalidConfigPath := filepath.Join(tempDir, "deb822-invalid.yaml")
+	err = os.WriteFile(invalidConfigPath, []byte(invalidDEB822Config), 0644)
+	if err != nil {
+		t.Fatalf("failed to create invalid config file: %v", err)
+	}
+	
+	// Run validate command (should fail)
+	cmd = exec.Command(binaryPath, "validate", invalidConfigPath)
+	cmd.Dir = tempDir
+	output, err = cmd.CombinedOutput()
+	
+	if err == nil {
+		t.Fatalf("validation should fail for invalid DEB822 config")
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "Suites") && !strings.Contains(outputStr, "Components") {
+		t.Errorf("expected validation error about missing Suites or Components fields, got: %s", outputStr)
+	}
+}
+
+func TestIntegration_LegacyRepositoryConversion(t *testing.T) {
+	binaryPath := getBinaryPath(t)
+	
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+	
+	// Test legacy repository configuration (should still work)
+	legacyConfig := `version: "1.0"
+repositories:
+  apt:
+    python39:
+      ppa: "deadsnakes/ppa"
+    docker:
+      uri: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+      key: "https://download.docker.com/linux/ubuntu/gpg.asc"
+packages:
+  apt:
+    - curl
+`
+	
+	configPath := filepath.Join(tempDir, "legacy-repos.yaml")
+	err := os.WriteFile(configPath, []byte(legacyConfig), 0644)
+	if err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+	
+	// Run validate command (should succeed with warnings about legacy format)
+	cmd := exec.Command(binaryPath, "validate", configPath)
+	cmd.Dir = tempDir
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		t.Errorf("validation should succeed for legacy config, got error: %v\nOutput: %s", err, string(output))
+	}
+	
+	// Run apply with dry-run (should work and show DEB822 conversion)
+	cmd = exec.Command(binaryPath, "apply", configPath, "--dry-run")
+	cmd.Dir = tempDir
+	output, err = cmd.CombinedOutput()
+	
+	if err != nil {
+		t.Errorf("apply --dry-run should succeed for legacy config, got error: %v\nOutput: %s", err, string(output))
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "DEB822") && !strings.Contains(outputStr, "sources") {
+		t.Logf("Note: Expected to see DEB822 or sources file creation messages in output: %s", outputStr)
+	}
+}
