@@ -92,13 +92,24 @@ type RepositoryManagement struct {
 	Flatpak []FlatpakRepository `yaml:"flatpak,omitempty" mapstructure:"flatpak,omitempty"`
 }
 
-// AptRepository represents an APT repository configuration
-// Uses add-apt-repository command for PPA and repository management
+// AptRepository represents an APT repository configuration using DEB822 format
+// Creates .sources files in /etc/apt/sources.list.d/ (Ubuntu 24.04+ only)
 type AptRepository struct {
-	Name string `yaml:"-" mapstructure:"-"`                           // Repository name/identifier (from YAML key)
-	PPA  string `yaml:"ppa,omitempty" mapstructure:"ppa,omitempty"`   // PPA format: "user/repo" (e.g., "deadsnakes/ppa")
-	URI  string `yaml:"uri,omitempty" mapstructure:"uri,omitempty"`   // Full repository URI for non-PPA repos
-	Key  string `yaml:"key,omitempty" mapstructure:"key,omitempty"`   // GPG key URL or keyserver key ID
+	Name           string   `yaml:"-" mapstructure:"-"`                                         // Repository name/identifier (from YAML key)
+	PPA            string   `yaml:"ppa,omitempty" mapstructure:"ppa,omitempty"`                 // PPA format: "user/repo" (e.g., "deadsnakes/ppa") - converted to DEB822
+	URIs           []string `yaml:"uris,omitempty" mapstructure:"uris,omitempty"`               // Repository URIs (DEB822 format)  
+	Suites         []string `yaml:"suites,omitempty" mapstructure:"suites,omitempty"`           // Distribution suites (e.g., "focal", "stable")
+	Components     []string `yaml:"components,omitempty" mapstructure:"components,omitempty"`   // Repository components (e.g., "main", "contrib")
+	Architectures  []string `yaml:"architectures,omitempty" mapstructure:"architectures,omitempty"` // Target architectures (e.g., "amd64", "arm64")
+	Types          []string `yaml:"types,omitempty" mapstructure:"types,omitempty"`             // Repository types ("deb", "deb-src")
+	SignedBy       string   `yaml:"signed_by,omitempty" mapstructure:"signed_by,omitempty"`     // GPG keyring file path
+	KeyURL         string   `yaml:"key_url,omitempty" mapstructure:"key_url,omitempty"`         // GPG key download URL
+	KeyID          string   `yaml:"key_id,omitempty" mapstructure:"key_id,omitempty"`           // GPG key ID from keyserver
+	Trusted        bool     `yaml:"trusted,omitempty" mapstructure:"trusted,omitempty"`         // Mark repository as trusted (use carefully)
+	
+	// Legacy fields for backward compatibility (will be converted to DEB822)
+	URI string `yaml:"uri,omitempty" mapstructure:"uri,omitempty"`   // Deprecated: use URIs, Suites, Components instead
+	Key string `yaml:"key,omitempty" mapstructure:"key,omitempty"`   // Deprecated: use KeyURL or KeyID instead
 }
 
 // FlatpakRepository represents a Flatpak remote repository

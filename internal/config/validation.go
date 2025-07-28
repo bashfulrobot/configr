@@ -264,82 +264,285 @@ func validateRepositories(config *Config, result *ValidationResult, configPos *C
 	validateFlatpakRepositories(config.Repositories.Flatpak, result, configPos, configPath)
 }
 
-// validateAptRepositories validates APT repository configurations
+// validateAptRepositories validates APT repository configurations using DEB822 format
 func validateAptRepositories(repos []AptRepository, result *ValidationResult, configPos *ConfigWithPosition, configPath string) {
 	for _, repo := range repos {
 		fieldPrefix := fmt.Sprintf("repositories.apt.%s", repo.Name)
 		
-		// Validate that either PPA or URI is provided, but not both
-		hasPPA := repo.PPA != ""
-		hasURI := repo.URI != ""
+		// Check for legacy format usage
+		hasLegacy := repo.PPA != "" || repo.URI != "" || repo.Key != ""
+		hasDEB822 := len(repo.URIs) > 0 || len(repo.Suites) > 0 || len(repo.Components) > 0
 		
-		if !hasPPA && !hasURI {
+		// Validate repository format specification
+		if !hasLegacy && !hasDEB822 {
 			result.Add(ValidationError{
 				Type:    "error",
 				Title:   "missing repository configuration",
 				Field:   fieldPrefix,
-				Message: "repository must specify either 'ppa' or 'uri'",
-				Help:    "add 'ppa: \"user/repo\"' for PPA or 'uri: \"deb [arch=amd64] https://...\"' for custom repository",
-				Note:    "PPA format: 'user/repo' (e.g., 'deadsnakes/ppa')",
+				Message: "repository must specify configuration in DEB822 format or legacy format",
+				Help:    "add 'ppa: \"user/repo\"' for PPA, legacy 'uri:' field, or DEB822 'uris:', 'suites:', 'components:' fields",
+				Note:    "DEB822 format is recommended for Ubuntu 24.04+",
 			})
 			continue
 		}
 		
-		if hasPPA && hasURI {
+		// Validate legacy format if used
+		if hasLegacy {
+			validateLegacyAptRepository(repo, result, fieldPrefix)
+		}
+		
+		// Validate DEB822 format if used
+		if hasDEB822 {
+			validateDEB822AptRepository(repo, result, fieldPrefix)
+		}
+		
+		// Validate mixed format usage (warning)
+		if hasLegacy && hasDEB822 {
+			result.Add(ValidationError{
+				Type:    "warning",
+				Title:   "mixed repository format",
+				Field:   fieldPrefix,
+				Message: "repository uses both legacy and DEB822 format fields",
+				Help:    "use either legacy format (ppa/uri/key) or DEB822 format (uris/suites/components)",
+				Note:    "legacy fields will be converted to DEB822 format",
+			})
+		}
+		
+		// Validate GPG key configuration
+		validateAptRepositoryKeys(repo, result, fieldPrefix)
+	}
+}
+
+// validateLegacyAptRepository validates legacy APT repository format
+func validateLegacyAptRepository(repo AptRepository, result *ValidationResult, fieldPrefix string) {
+	hasPPA := repo.PPA != ""
+	hasURI := repo.URI != ""
+	
+	// Validate that either PPA or URI is provided, but not both
+	if hasPPA && hasURI {
+		result.Add(ValidationError{
+			Type:    "error",
+			Title:   "conflicting legacy repository configuration",
+			Field:   fieldPrefix,
+			Message: "repository cannot specify both 'ppa' and 'uri'",
+			Help:    "use 'ppa' for Ubuntu PPAs or 'uri' for custom repositories",
+			Note:    "legacy format will be converted to DEB822",
+		})
+		return
+	}
+	
+	// Validate PPA format
+	if hasPPA {
+		if !isValidPPAFormat(repo.PPA) {
+			result.Add(ValidationError{
+				Type:       "error",
+				Title:      "invalid PPA format",
+				Field:      fieldPrefix + ".ppa",
+				Value:      repo.PPA,
+				Message:    "PPA must be in 'user/repo' format",
+				Help:       "use format like 'deadsnakes/ppa' or 'ubuntu-toolchain-r/test'",
+				Suggestion: suggestPPAFormat(repo.PPA),
+			})
+		}
+	}
+	
+	// Validate URI format
+	if hasURI {
+		if !isValidAPTRepositoryURI(repo.URI) {
 			result.Add(ValidationError{
 				Type:    "error",
-				Title:   "conflicting repository configuration",
-				Field:   fieldPrefix,
-				Message: "repository cannot specify both 'ppa' and 'uri'",
-				Help:    "use 'ppa' for Ubuntu PPAs or 'uri' for custom repositories",
-				Note:    "choose one method based on your repository type",
+				Title:   "invalid repository URI",
+				Field:   fieldPrefix + ".uri",
+				Value:   repo.URI,
+				Message: "repository URI format is invalid",
+				Help:    "use format: 'deb [arch=amd64] https://example.com/repo stable main'",
+				Note:    "URI should start with 'deb' or 'deb-src'",
 			})
-			continue
 		}
-		
-		// Validate PPA format
-		if hasPPA {
-			if !isValidPPAFormat(repo.PPA) {
-				result.Add(ValidationError{
-					Type:       "error",
-					Title:      "invalid PPA format",
-					Field:      fieldPrefix + ".ppa",
-					Value:      repo.PPA,
-					Message:    "PPA must be in 'user/repo' format",
-					Help:       "use format like 'deadsnakes/ppa' or 'ubuntu-toolchain-r/test'",
-					Suggestion: suggestPPAFormat(repo.PPA),
-				})
-			}
-		}
-		
-		// Validate URI format
-		if hasURI {
-			if !isValidAPTRepositoryURI(repo.URI) {
+	}
+}
+
+// validateDEB822AptRepository validates DEB822 APT repository format
+func validateDEB822AptRepository(repo AptRepository, result *ValidationResult, fieldPrefix string) {
+	// Validate required URIs field
+	if len(repo.URIs) == 0 {
+		result.Add(ValidationError{
+			Type:    "error",
+			Title:   "missing URIs field",
+			Field:   fieldPrefix + ".uris",
+			Message: "DEB822 repository must specify at least one URI",
+			Help:    "add 'uris: [\"https://example.com/repo\"]'",
+			Note:    "URIs specify the repository locations",
+		})
+	} else {
+		// Validate each URI
+		for i, uri := range repo.URIs {
+			if !isValidRepositoryURI(uri) {
 				result.Add(ValidationError{
 					Type:    "error",
 					Title:   "invalid repository URI",
-					Field:   fieldPrefix + ".uri",
-					Value:   repo.URI,
-					Message: "repository URI format is invalid",
-					Help:    "use format: 'deb [arch=amd64] https://example.com/repo stable main'",
-					Note:    "URI should start with 'deb' or 'deb-src'",
+					Field:   fmt.Sprintf("%s.uris[%d]", fieldPrefix, i),
+					Value:   uri,
+					Message: "repository URI must be a valid HTTPS URL",
+					Help:    "use format: 'https://example.com/repo' or 'https://ppa.launchpadcontent.net/user/repo/ubuntu'",
+					Note:    "HTTPS is required for security",
 				})
 			}
 		}
-		
-		// Validate GPG key if provided
-		if repo.Key != "" {
-			if !isValidGPGKeyReference(repo.Key) {
+	}
+	
+	// Validate required Suites field
+	if len(repo.Suites) == 0 {
+		result.Add(ValidationError{
+			Type:    "error",
+			Title:   "missing Suites field",
+			Field:   fieldPrefix + ".suites",
+			Message: "DEB822 repository must specify at least one suite",
+			Help:    "add 'suites: [\"focal\"]' or 'suites: [\"stable\"]'",
+			Note:    "suites specify the distribution releases",
+		})
+	}
+	
+	// Validate required Components field
+	if len(repo.Components) == 0 {
+		result.Add(ValidationError{
+			Type:    "error",
+			Title:   "missing Components field",
+			Field:   fieldPrefix + ".components",
+			Message: "DEB822 repository must specify at least one component",
+			Help:    "add 'components: [\"main\"]' or 'components: [\"main\", \"contrib\"]'",
+			Note:    "components specify the repository sections",
+		})
+	}
+	
+	// Validate optional Types field
+	if len(repo.Types) > 0 {
+		for i, repoType := range repo.Types {
+			if !isValidRepositoryType(repoType) {
 				result.Add(ValidationError{
 					Type:    "error",
-					Title:   "invalid GPG key reference",
-					Field:   fieldPrefix + ".key",
-					Value:   repo.Key,
-					Message: "GPG key must be a URL or keyserver key ID",
-					Help:    "use a HTTPS URL to .gpg file or keyserver key ID",
-					Note:    "example: 'https://example.com/key.gpg' or '0x1234567890ABCDEF'",
+					Title:   "invalid repository type",
+					Field:   fmt.Sprintf("%s.types[%d]", fieldPrefix, i),
+					Value:   repoType,
+					Message: "repository type must be 'deb' or 'deb-src'",
+					Help:    "use 'deb' for binary packages or 'deb-src' for source packages",
+					Note:    "defaults to 'deb' if not specified",
 				})
 			}
+		}
+	}
+	
+	// Validate optional Architectures field
+	if len(repo.Architectures) > 0 {
+		for i, arch := range repo.Architectures {
+			if !isValidArchitecture(arch) {
+				result.Add(ValidationError{
+					Type:    "error",
+					Title:   "invalid architecture",
+					Field:   fmt.Sprintf("%s.architectures[%d]", fieldPrefix, i),
+					Value:   arch,
+					Message: "unsupported architecture",
+					Help:    "use common architectures like 'amd64', 'arm64', 'armhf'",
+					Note:    "defaults to 'amd64' if not specified",
+				})
+			}
+		}
+	}
+}
+
+// validateAptRepositoryKeys validates GPG key configuration
+func validateAptRepositoryKeys(repo AptRepository, result *ValidationResult, fieldPrefix string) {
+	hasLegacyKey := repo.Key != ""
+	hasKeyURL := repo.KeyURL != ""
+	hasKeyID := repo.KeyID != ""
+	
+	// Check for conflicting key specifications
+	keyCount := 0
+	if hasLegacyKey { keyCount++ }
+	if hasKeyURL { keyCount++ }
+	if hasKeyID { keyCount++ }
+	
+	if keyCount > 1 {
+		result.Add(ValidationError{
+			Type:    "error",
+			Title:   "conflicting key specifications",
+			Field:   fieldPrefix,
+			Message: "repository can only specify one key method",
+			Help:    "use either 'key' (legacy), 'key_url', or 'key_id'",
+			Note:    "multiple key specifications are not allowed",
+		})
+		return
+	}
+	
+	// Validate legacy key format
+	if hasLegacyKey {
+		if !isValidGPGKeyReference(repo.Key) {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "invalid GPG key reference",
+				Field:   fieldPrefix + ".key",
+				Value:   repo.Key,
+				Message: "GPG key must be a URL or keyserver key ID",
+				Help:    "use a HTTPS URL to .gpg file or keyserver key ID",
+				Note:    "example: 'https://example.com/key.gpg' or '0x1234567890ABCDEF'",
+			})
+		}
+	}
+	
+	// Validate key URL
+	if hasKeyURL {
+		if !isValidKeyURL(repo.KeyURL) {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "invalid key URL",
+				Field:   fieldPrefix + ".key_url",
+				Value:   repo.KeyURL,
+				Message: "key URL must be a valid HTTPS URL",
+				Help:    "use format: 'https://example.com/key.gpg' or 'https://example.com/key.asc'",
+				Note:    "HTTPS is required for security",
+			})
+		}
+	}
+	
+	// Validate key ID
+	if hasKeyID {
+		if !isValidKeyID(repo.KeyID) {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "invalid key ID",
+				Field:   fieldPrefix + ".key_id",
+				Value:   repo.KeyID,
+				Message: "key ID must be a valid GPG key fingerprint or short ID",
+				Help:    "use format: '0x1234567890ABCDEF' or '1234567890ABCDEF'",
+				Note:    "long key IDs are recommended for security",
+			})
+		}
+	}
+	
+	// Validate SignedBy path when key is specified
+	if (hasKeyURL || hasKeyID) && repo.SignedBy == "" {
+		result.Add(ValidationError{
+			Type:    "warning",
+			Title:   "missing signed_by path",
+			Field:   fieldPrefix + ".signed_by",
+			Message: "SignedBy path recommended when using key_url or key_id",
+			Help:    "add 'signed_by: \"/usr/share/keyrings/repo-name.gpg\"'",
+			Note:    "SignedBy specifies where to store the GPG key",
+		})
+	}
+	
+	// Validate SignedBy path format
+	if repo.SignedBy != "" {
+		if !isValidSignedByPath(repo.SignedBy) {
+			result.Add(ValidationError{
+				Type:    "error",
+				Title:   "invalid SignedBy path",
+				Field:   fieldPrefix + ".signed_by",
+				Value:   repo.SignedBy,
+				Message: "SignedBy path must point to /usr/share/keyrings/",
+				Help:    "use format: '/usr/share/keyrings/repo-name.gpg'",
+				Note:    "keyring files should be stored in the standard location",
+			})
 		}
 	}
 }
@@ -1118,4 +1321,91 @@ func isStandardBinaryLocation(destination string) bool {
 	}
 	
 	return false
+}
+
+// DEB822 validation helper functions
+
+// isValidRepositoryURI validates a repository URI for DEB822 format
+func isValidRepositoryURI(uri string) bool {
+	// Must be HTTPS for security
+	if !strings.HasPrefix(uri, "https://") {
+		return false
+	}
+	
+	// Basic URL validation
+	return isValidURL(uri)
+}
+
+// isValidRepositoryType validates repository type (deb or deb-src)
+func isValidRepositoryType(repoType string) bool {
+	return repoType == "deb" || repoType == "deb-src"
+}
+
+// isValidArchitecture validates system architecture
+func isValidArchitecture(arch string) bool {
+	validArchs := []string{
+		"amd64", "arm64", "armhf", "armel", "i386", "mips", "mipsel", 
+		"mips64el", "ppc64el", "s390x", "all", "any",
+	}
+	
+	for _, validArch := range validArchs {
+		if arch == validArch {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// isValidKeyURL validates a GPG key URL
+func isValidKeyURL(keyURL string) bool {
+	// Must be HTTPS for security
+	if !strings.HasPrefix(keyURL, "https://") {
+		return false
+	}
+	
+	// Should end with common key file extensions
+	if !strings.HasSuffix(keyURL, ".gpg") && !strings.HasSuffix(keyURL, ".asc") && 
+	   !strings.HasSuffix(keyURL, ".key") {
+		return false
+	}
+	
+	return isValidURL(keyURL)
+}
+
+// isValidKeyID validates a GPG key ID
+func isValidKeyID(keyID string) bool {
+	// Clean key ID
+	cleanKeyID := strings.TrimPrefix(keyID, "0x")
+	
+	// Must be hexadecimal and proper length
+	// Short key IDs: 8 chars, Long key IDs: 16 chars, Fingerprints: 40 chars
+	if len(cleanKeyID) != 8 && len(cleanKeyID) != 16 && len(cleanKeyID) != 40 {
+		return false
+	}
+	
+	// Must be valid hex
+	matched, _ := regexp.MatchString(`^[A-Fa-f0-9]+$`, cleanKeyID)
+	return matched
+}
+
+// isValidSignedByPath validates the SignedBy keyring path
+func isValidSignedByPath(signedBy string) bool {
+	// Must be in standard keyring directory
+	if !strings.HasPrefix(signedBy, "/usr/share/keyrings/") {
+		return false
+	}
+	
+	// Must end with .gpg
+	if !strings.HasSuffix(signedBy, ".gpg") {
+		return false
+	}
+	
+	// Validate filename (no path traversal)
+	filename := strings.TrimPrefix(signedBy, "/usr/share/keyrings/")
+	if strings.Contains(filename, "/") || strings.Contains(filename, "..") {
+		return false
+	}
+	
+	return true
 }

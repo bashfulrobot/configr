@@ -59,16 +59,41 @@ func (rm *RepositoryManagement) unmarshalAptRepositories(node *yaml.Node) error 
 
 		if configNode.Kind == yaml.MappingNode {
 			var config struct {
+				// Legacy fields
 				PPA string `yaml:"ppa,omitempty"`
 				URI string `yaml:"uri,omitempty"`
 				Key string `yaml:"key,omitempty"`
+				
+				// DEB822 fields
+				URIs          []string `yaml:"uris,omitempty"`
+				Suites        []string `yaml:"suites,omitempty"`
+				Components    []string `yaml:"components,omitempty"`
+				Architectures []string `yaml:"architectures,omitempty"`
+				Types         []string `yaml:"types,omitempty"`
+				SignedBy      string   `yaml:"signed_by,omitempty"`
+				KeyURL        string   `yaml:"key_url,omitempty"`
+				KeyID         string   `yaml:"key_id,omitempty"`
+				Trusted       bool     `yaml:"trusted,omitempty"`
 			}
 			if err := configNode.Decode(&config); err != nil {
 				return fmt.Errorf("failed to decode apt repository %s: %w", repo.Name, err)
 			}
+			
+			// Set legacy fields
 			repo.PPA = config.PPA
 			repo.URI = config.URI
 			repo.Key = config.Key
+			
+			// Set DEB822 fields
+			repo.URIs = config.URIs
+			repo.Suites = config.Suites
+			repo.Components = config.Components
+			repo.Architectures = config.Architectures
+			repo.Types = config.Types
+			repo.SignedBy = config.SignedBy
+			repo.KeyURL = config.KeyURL
+			repo.KeyID = config.KeyID
+			repo.Trusted = config.Trusted
 		}
 
 		rm.Apt = append(rm.Apt, repo)

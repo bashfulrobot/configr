@@ -577,9 +577,29 @@ func TestValidateRepositories_ValidAPTRepositories(t *testing.T) {
 		Version: "1.0",
 		Repositories: RepositoryManagement{
 			Apt: []AptRepository{
+				// Legacy format - should still work
 				{Name: "python39", PPA: "deadsnakes/ppa"},
 				{Name: "docker", URI: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable", Key: "https://download.docker.com/linux/ubuntu/gpg.asc"},
 				{Name: "nodejs", URI: "deb https://deb.nodesource.com/node_16.x focal main", Key: "0x9FD3B784BC1C6FC31A8A0A1C1655A0AB68576280"},
+				// DEB822 format
+				{
+					Name:         "vscode",
+					URIs:         []string{"https://packages.microsoft.com/repos/code"},
+					Suites:       []string{"stable"},
+					Components:   []string{"main"},
+					Types:        []string{"deb"},
+					Architectures: []string{"amd64", "arm64"},
+					KeyURL:       "https://packages.microsoft.com/keys/microsoft.asc",
+					SignedBy:     "/usr/share/keyrings/vscode.gpg",
+				},
+				{
+					Name:       "chrome",
+					URIs:       []string{"https://dl.google.com/linux/chrome/deb/"},
+					Suites:     []string{"stable"},
+					Components: []string{"main"},
+					KeyID:      "0xEB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
+					SignedBy:   "/usr/share/keyrings/chrome.gpg",
+				},
 			},
 		},
 	}
@@ -624,7 +644,7 @@ func TestValidateRepositories_InvalidAPTRepositories(t *testing.T) {
 		{
 			name:     "both ppa and uri",
 			repo:     AptRepository{Name: "test", PPA: "user/repo", URI: "deb https://example.com/repo stable main"},
-			errorMsg: "conflicting repository configuration",
+			errorMsg: "conflicting legacy repository configuration",
 		},
 		{
 			name:     "invalid ppa format",
@@ -640,6 +660,150 @@ func TestValidateRepositories_InvalidAPTRepositories(t *testing.T) {
 			name:     "invalid gpg key",
 			repo:     AptRepository{Name: "test", PPA: "user/repo", Key: "invalid-key"},
 			errorMsg: "invalid GPG key reference",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Version: "1.0",
+				Repositories: RepositoryManagement{
+					Apt: []AptRepository{tt.repo},
+				},
+			}
+			
+			result := Validate(config, "config.yaml")
+			
+			if !result.HasErrors() {
+				t.Errorf("validation should fail for %s", tt.name)
+				return
+			}
+			
+			found := false
+			for _, err := range result.Errors {
+				if strings.Contains(err.Title, tt.errorMsg) {
+					found = true
+					break
+				}
+			}
+			
+			if !found {
+				t.Errorf("expected error message containing '%s', got errors: %v", tt.errorMsg, result.Errors)
+			}
+		})
+	}
+}
+
+func TestValidateRepositories_InvalidDEB822Repositories(t *testing.T) {
+	tests := []struct {
+		name     string
+		repo     AptRepository
+		errorMsg string
+	}{
+		{
+			name: "missing URIs in DEB822",
+			repo: AptRepository{
+				Name:       "test",
+				Suites:     []string{"stable"},
+				Components: []string{"main"},
+			},
+			errorMsg: "missing URIs field",
+		},
+		{
+			name: "missing Suites in DEB822",
+			repo: AptRepository{
+				Name:       "test",
+				URIs:       []string{"https://example.com/repo"},
+				Components: []string{"main"},
+			},
+			errorMsg: "missing Suites field",
+		},
+		{
+			name: "missing Components in DEB822",
+			repo: AptRepository{
+				Name:   "test",
+				URIs:   []string{"https://example.com/repo"},
+				Suites: []string{"stable"},
+			},
+			errorMsg: "missing Components field",
+		},
+		{
+			name: "invalid repository type",
+			repo: AptRepository{
+				Name:       "test",
+				URIs:       []string{"https://example.com/repo"},
+				Suites:     []string{"stable"},
+				Components: []string{"main"},
+				Types:      []string{"invalid"},
+			},
+			errorMsg: "invalid repository type",
+		},
+		{
+			name: "invalid architecture",
+			repo: AptRepository{
+				Name:          "test",
+				URIs:          []string{"https://example.com/repo"},
+				Suites:        []string{"stable"},
+				Components:    []string{"main"},
+				Architectures: []string{"invalid-arch"},
+			},
+			errorMsg: "invalid architecture",
+		},
+		{
+			name: "invalid key URL",
+			repo: AptRepository{
+				Name:       "test",
+				URIs:       []string{"https://example.com/repo"},
+				Suites:     []string{"stable"},
+				Components: []string{"main"},
+				KeyURL:     "http://insecure.com/key.gpg",
+			},
+			errorMsg: "invalid key URL",
+		},
+		{
+			name: "invalid key ID",
+			repo: AptRepository{
+				Name:       "test",
+				URIs:       []string{"https://example.com/repo"},
+				Suites:     []string{"stable"},
+				Components: []string{"main"},
+				KeyID:      "invalid-key-id",
+			},
+			errorMsg: "invalid key ID",
+		},
+		{
+			name: "invalid SignedBy path",
+			repo: AptRepository{
+				Name:       "test",
+				URIs:       []string{"https://example.com/repo"},
+				Suites:     []string{"stable"},
+				Components: []string{"main"},
+				KeyURL:     "https://example.com/key.gpg",
+				SignedBy:   "/invalid/path/key.gpg",
+			},
+			errorMsg: "invalid SignedBy path",
+		},
+		{
+			name: "conflicting key specifications",
+			repo: AptRepository{
+				Name:       "test",
+				URIs:       []string{"https://example.com/repo"},
+				Suites:     []string{"stable"},
+				Components: []string{"main"},
+				KeyURL:     "https://example.com/key.gpg",
+				KeyID:      "0x1234567890ABCDEF",
+			},
+			errorMsg: "conflicting key specifications",
+		},
+		{
+			name: "http URI (insecure)",
+			repo: AptRepository{
+				Name:       "test",
+				URIs:       []string{"http://insecure.com/repo"},
+				Suites:     []string{"stable"},
+				Components: []string{"main"},
+			},
+			errorMsg: "invalid repository URI",
 		},
 	}
 
