@@ -9,6 +9,7 @@ type Config struct {
 	Repositories    RepositoryManagement      `yaml:"repositories,omitempty" mapstructure:"repositories,omitempty"`
 	Packages        PackageManagement         `yaml:"packages" mapstructure:"packages"`
 	Files           map[string]File           `yaml:"files" mapstructure:"files"`
+	Binaries        map[string]Binary         `yaml:"binaries,omitempty" mapstructure:"binaries,omitempty"`
 	DConf           DConfConfig               `yaml:"dconf" mapstructure:"dconf"`
 }
 
@@ -53,6 +54,19 @@ type File struct {
 	Mode             string `yaml:"mode,omitempty" mapstructure:"mode,omitempty"`
 	Backup           bool   `yaml:"backup,omitempty" mapstructure:"backup,omitempty"`
 	Copy             bool   `yaml:"copy,omitempty" mapstructure:"copy,omitempty"`
+	Interactive      bool   `yaml:"interactive,omitempty" mapstructure:"interactive,omitempty"`           // Prompt for conflicts
+	PromptPermissions bool  `yaml:"prompt_permissions,omitempty" mapstructure:"prompt_permissions,omitempty"` // Prompt for permissions
+	PromptOwnership  bool   `yaml:"prompt_ownership,omitempty" mapstructure:"prompt_ownership,omitempty"`     // Prompt for ownership
+}
+
+// Binary represents a binary to be downloaded and installed from a remote source
+type Binary struct {
+	Source           string `yaml:"source" mapstructure:"source"`                                         // URL to download the binary from
+	Destination      string `yaml:"destination" mapstructure:"destination"`                               // Where to place the binary (typically in PATH)
+	Owner            string `yaml:"owner,omitempty" mapstructure:"owner,omitempty"`                       // Optional file owner
+	Group            string `yaml:"group,omitempty" mapstructure:"group,omitempty"`                       // Optional file group
+	Mode             string `yaml:"mode,omitempty" mapstructure:"mode,omitempty"`                         // File permissions (default: 755)
+	Backup           bool   `yaml:"backup,omitempty" mapstructure:"backup,omitempty"`                     // Backup existing binary before replacement
 	Interactive      bool   `yaml:"interactive,omitempty" mapstructure:"interactive,omitempty"`           // Prompt for conflicts
 	PromptPermissions bool  `yaml:"prompt_permissions,omitempty" mapstructure:"prompt_permissions,omitempty"` // Prompt for permissions
 	PromptOwnership  bool   `yaml:"prompt_ownership,omitempty" mapstructure:"prompt_ownership,omitempty"`     // Prompt for ownership

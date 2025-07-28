@@ -29,14 +29,15 @@ This command will:
 - Remove packages no longer in configuration (if --remove-packages=true)
 - Add APT and Flatpak repositories
 - Deploy and symlink files to their destinations
+- Download and deploy binaries from remote repositories
 - Install APT, Flatpak, and Snap packages
 - Apply dconf settings for desktop configuration
-- Create backups of existing files when requested
+- Create backups of existing files and binaries when requested
 - Track package state for future removal operations
-- Interactively resolve file conflicts when --interactive flag is used
+- Interactively resolve file and binary conflicts when --interactive flag is used
 
 Interactive features include:
-- Conflict resolution prompts for existing files
+- Conflict resolution prompts for existing files and binaries
 - File diff preview before replacement
 - Interactive permission and ownership configuration
 
@@ -216,8 +217,31 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Apply binary configurations
+	var deployedBinaries []pkg.ManagedBinary
+	if len(cfg.Binaries) > 0 {
+		logger.Info("Applying binary configurations")
+		binaryManager := pkg.NewBinaryManager(logger, dryRun, configDir)
+		
+		// Enable interactive mode on all binaries if global flag is set
+		if interactiveMode {
+			cfg.Binaries = enableInteractiveModeOnBinaries(cfg.Binaries)
+		}
+		
+		// Validate binary permissions before proceeding
+		if err := binaryManager.ValidateBinaryPermissions(cfg.Binaries); err != nil {
+			return fmt.Errorf("binary permission validation failed: %w", err)
+		}
+
+		var err error
+		deployedBinaries, err = binaryManager.DeployBinaries(cfg.Binaries)
+		if err != nil {
+			return fmt.Errorf("failed to deploy binaries: %w", err)
+		}
+	}
+
 	// Apply package configurations
-	if err := applyPackageConfigurations(cfg, deployedFiles, logger, dryRun, useOptimization, configDir); err != nil {
+	if err := applyPackageConfigurations(cfg, deployedFiles, deployedBinaries, logger, dryRun, useOptimization, configDir); err != nil {
 		return fmt.Errorf("failed to apply package configurations: %w", err)
 	}
 
@@ -269,6 +293,15 @@ func enableInteractiveModeOnFiles(files map[string]config.File) map[string]confi
 	return files
 }
 
+// enableInteractiveModeOnBinaries enables interactive features on all binaries
+func enableInteractiveModeOnBinaries(binaries map[string]config.Binary) map[string]config.Binary {
+	for name, binary := range binaries {
+		binary.Interactive = true
+		binaries[name] = binary
+	}
+	return binaries
+}
+
 // findConfigFile searches for a config file in standard locations
 func findConfigFile() (string, error) {
 	searchPaths := []string{
@@ -298,7 +331,7 @@ func findConfigFile() (string, error) {
 }
 
 // applyPackageConfigurations handles package management for all supported package managers
-func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedFile, logger *log.Logger, dryRun bool, useOptimization bool, configDir string) error {
+func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedFile, deployedBinaries []pkg.ManagedBinary, logger *log.Logger, dryRun bool, useOptimization bool, configDir string) error {
 	// Initialize state manager for package removal tracking
 	stateManager := pkg.NewStateManager(logger)
 	
@@ -318,7 +351,15 @@ func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedF
 		filesToRemove = []pkg.ManagedFile{}
 	}
 	
-	// Remove packages and files that are no longer in configuration (if enabled)
+	// Get binaries to remove (binaries in previous state but not in current config)
+	binariesToRemove, err := stateManager.GetBinariesToRemove(cfg)
+	if err != nil {
+		logger.Warn("Could not determine binaries to remove", "error", err)
+		// Continue with deployment even if binary removal tracking fails
+		binariesToRemove = []pkg.ManagedBinary{}
+	}
+	
+	// Remove packages, files, and binaries that are no longer in configuration (if enabled)
 	if removePackages {
 		if err := removePackagesNotInConfig(packagesToRemove, logger, dryRun); err != nil {
 			return fmt.Errorf("failed to remove packages: %w", err)
@@ -326,8 +367,11 @@ func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedF
 		if err := removeFilesNotInConfig(filesToRemove, configDir, logger, dryRun); err != nil {
 			return fmt.Errorf("failed to remove files: %w", err)
 		}
+		if err := removeBinariesNotInConfig(binariesToRemove, logger, dryRun); err != nil {
+			return fmt.Errorf("failed to remove binaries: %w", err)
+		}
 	} else {
-		logger.Debug("Package and file removal disabled by --remove-packages=false flag")
+		logger.Debug("Package, file, and binary removal disabled by --remove-packages=false flag")
 	}
 	// Handle APT packages
 	if len(cfg.Packages.Apt) > 0 {
@@ -379,7 +423,7 @@ func applyPackageConfigurations(cfg *config.Config, deployedFiles []pkg.ManagedF
 
 	// Update state file with current configuration (only if not dry-run)
 	if !dryRun {
-		if err := stateManager.UpdateState(cfg, deployedFiles); err != nil {
+		if err := stateManager.UpdateStateWithBinaries(cfg, deployedFiles, deployedBinaries); err != nil {
 			logger.Warn("Failed to update state", "error", err)
 			// Don't fail the entire operation for state tracking issues
 		}
@@ -450,4 +494,15 @@ func applyRepositoryConfigurations(cfg *config.Config, logger *log.Logger, dryRu
 	}
 
 	return nil
+}
+
+// removeBinariesNotInConfig removes binaries that are no longer in the configuration
+func removeBinariesNotInConfig(binariesToRemove []pkg.ManagedBinary, logger *log.Logger, dryRun bool) error {
+	if len(binariesToRemove) == 0 {
+		return nil
+	}
+	logger.Info("Removing binaries no longer in configuration", "count", len(binariesToRemove))
+	binaryManager := pkg.NewBinaryManager(logger, dryRun, "")
+	
+	return binaryManager.RemoveBinaries(binariesToRemove)
 }

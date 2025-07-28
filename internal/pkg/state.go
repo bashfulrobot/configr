@@ -17,12 +17,13 @@ type StateManager struct {
 	statePath string
 }
 
-// PackageState represents the state of packages and files managed by configr
+// PackageState represents the state of packages, files, and binaries managed by configr
 type PackageState struct {
 	Version     string            `json:"version"`
 	LastUpdated time.Time         `json:"last_updated"`
 	Packages    ManagedPackages   `json:"packages"`
 	Files       []ManagedFile     `json:"files"`
+	Binaries    []ManagedBinary   `json:"binaries"`
 }
 
 // ManagedPackages tracks packages by manager type
@@ -78,6 +79,7 @@ func (sm *StateManager) LoadState() (*PackageState, error) {
 			LastUpdated: time.Now(),
 			Packages:    ManagedPackages{},
 			Files:       []ManagedFile{},
+			Binaries:    []ManagedBinary{},
 		}, nil
 	}
 	
@@ -93,7 +95,7 @@ func (sm *StateManager) LoadState() (*PackageState, error) {
 	
 	sm.logger.Debug("Loaded package state", "apt_count", len(state.Packages.Apt), 
 		"flatpak_count", len(state.Packages.Flatpak), "snap_count", len(state.Packages.Snap),
-		"files_count", len(state.Files))
+		"files_count", len(state.Files), "binaries_count", len(state.Binaries))
 	
 	return &state, nil
 }
@@ -123,8 +125,13 @@ func (sm *StateManager) SaveState(state *PackageState) error {
 	return nil
 }
 
-// UpdateState updates the state with current configuration packages and files
+// UpdateState updates the state with current configuration packages, files, and binaries
 func (sm *StateManager) UpdateState(cfg *config.Config, deployedFiles []ManagedFile) error {
+	return sm.UpdateStateWithBinaries(cfg, deployedFiles, []ManagedBinary{})
+}
+
+// UpdateStateWithBinaries updates the state with current configuration packages, files, and binaries
+func (sm *StateManager) UpdateStateWithBinaries(cfg *config.Config, deployedFiles []ManagedFile, deployedBinaries []ManagedBinary) error {
 	state, err := sm.LoadState()
 	if err != nil {
 		return fmt.Errorf("failed to load current state: %w", err)
@@ -137,6 +144,9 @@ func (sm *StateManager) UpdateState(cfg *config.Config, deployedFiles []ManagedF
 	
 	// Update file state
 	state.Files = deployedFiles
+	
+	// Update binary state
+	state.Binaries = deployedBinaries
 	
 	return sm.SaveState(state)
 }
@@ -212,6 +222,39 @@ func (sm *StateManager) GetFilesToRemove(cfg *config.Config) ([]ManagedFile, err
 	}
 	
 	return filesToRemove, nil
+}
+
+// GetBinariesToRemove compares current state with new configuration and returns binaries to remove
+func (sm *StateManager) GetBinariesToRemove(cfg *config.Config) ([]ManagedBinary, error) {
+	currentState, err := sm.LoadState()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load current state: %w", err)
+	}
+	
+	// Create a map of current configuration binary names for quick lookup
+	currentBinaries := make(map[string]bool)
+	for binaryName := range cfg.Binaries {
+		currentBinaries[binaryName] = true
+	}
+	
+	// Find binaries in state that are not in current configuration
+	var binariesToRemove []ManagedBinary
+	for _, binary := range currentState.Binaries {
+		if !currentBinaries[binary.Name] {
+			binariesToRemove = append(binariesToRemove, binary)
+		}
+	}
+	
+	sm.logger.Debug("Determined binaries to remove", "count", len(binariesToRemove))
+	if len(binariesToRemove) > 0 {
+		binaryNames := make([]string, len(binariesToRemove))
+		for i, binary := range binariesToRemove {
+			binaryNames[i] = binary.Name
+		}
+		sm.logger.Debug("Binaries to remove", "binaries", binaryNames)
+	}
+	
+	return binariesToRemove, nil
 }
 
 // extractPackageNames extracts package names from PackageEntry slices
