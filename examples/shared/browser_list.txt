@@ -1,0 +1,9 @@
+# Shared browser list
+# Demonstrates cross-directory relative path resolution
+
+supported_browsers:
+  - chromium
+  - firefox
+  - safari
+  - brave
+  - edge

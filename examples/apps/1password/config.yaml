@@ -1,0 +1,16 @@
+# 1Password configuration included from subdirectory
+# Relative paths here are resolved relative to THIS file's directory
+
+files:
+  # This path resolves to: examples/apps/1password/files/custom_allowed_browsers
+  custom_allowed_browsers:
+    source: "files/custom_allowed_browsers"    # Relative to this config file
+    destination: "/etc/1password/custom_allowed_browsers" 
+    backup: true
+    interactive: true
+    
+  # Another example showing the path resolution
+  browser_support:
+    source: "../shared/browser_list.txt"       # Relative to this config file
+    destination: "/etc/1password/browser_support.txt"
+    backup: true

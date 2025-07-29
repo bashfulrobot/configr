@@ -1,0 +1,59 @@
+version: "1.0"
+
+# Enhanced File Management Example
+# Demonstrates new features: intelligent conflict detection, 
+# context-aware path resolution, and system directory support
+
+includes:
+  # Include configurations from subdirectories
+  # Relative paths in included files will resolve correctly
+  - path: "apps/1password/config.yaml"
+  - path: "dotfiles/shell.yaml"
+
+files:
+  # Basic file deployment with backup
+  vimrc:
+    source: "dotfiles/.vimrc"           # Relative to this config file
+    destination: "~/.vimrc"
+    backup: true                        # Backup existing file before replacement
+    
+  # System file requiring elevated privileges
+  custom_browsers:
+    source: "1password/custom_allowed_browsers"
+    destination: "/etc/1password/custom_allowed_browsers"  # System directory - requires sudo
+    backup: true                        # Important for system files
+    interactive: true                   # Prompt for conflicts
+    
+  # Copy mode with permission settings
+  app_config:
+    source: "config/app.conf"
+    destination: "/opt/myapp/config.conf"
+    copy: true                          # Copy instead of symlink
+    mode: "644"
+    owner: "root"
+    group: "root"
+    backup: true
+    
+  # Interactive file with prompts
+  sensitive_config:
+    source: "secrets/database.yaml"
+    destination: "~/.config/app/database.yaml"
+    interactive: true                   # Enable conflict resolution prompts
+    prompt_permissions: true            # Prompt for permission changes
+    prompt_ownership: true              # Prompt for ownership changes
+    backup: true                        # Always backup sensitive files
+
+# Package management still works as before
+packages:
+  apt:
+    - git
+    - curl
+    - "1password":
+        flags: ["-y"]
+
+# Repository management for custom software
+repositories:
+  apt:
+    1password:
+      uri: "deb [arch=amd64] https://downloads.1password.com/linux/debian/amd64 stable main"
+      key: "https://downloads.1password.com/linux/keys/1password.asc"

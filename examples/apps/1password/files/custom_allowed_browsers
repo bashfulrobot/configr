@@ -1,0 +1,10 @@
+# 1Password Custom Allowed Browsers
+#
+# This file demonstrates context-aware path resolution.
+# When included from apps/1password/config.yaml, this path resolves correctly
+# relative to the config file that references it.
+
+chrome
+firefox
+brave
+edge

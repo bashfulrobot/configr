@@ -1,0 +1,20 @@
+# Shell configuration included from subdirectory
+# Demonstrates context-aware path resolution
+
+files:
+  # Paths relative to the dotfiles/ directory
+  bashrc:
+    source: "bash/.bashrc"                # Resolves to: examples/dotfiles/bash/.bashrc
+    destination: "~/.bashrc"
+    backup: true
+    
+  zshrc:
+    source: "zsh/.zshrc"                  # Resolves to: examples/dotfiles/zsh/.zshrc  
+    destination: "~/.zshrc"
+    backup: true
+    
+  # Cross-directory reference
+  shared_aliases:
+    source: "../shared/aliases.sh"       # Resolves to: examples/shared/aliases.sh
+    destination: "~/.config/shell/aliases.sh"
+    backup: true
