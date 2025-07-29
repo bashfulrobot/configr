@@ -57,6 +57,7 @@ type File struct {
 	Interactive      bool   `yaml:"interactive,omitempty" mapstructure:"interactive,omitempty"`           // Prompt for conflicts
 	PromptPermissions bool  `yaml:"prompt_permissions,omitempty" mapstructure:"prompt_permissions,omitempty"` // Prompt for permissions
 	PromptOwnership  bool   `yaml:"prompt_ownership,omitempty" mapstructure:"prompt_ownership,omitempty"`     // Prompt for ownership
+	ConfigDir        string `yaml:"-" mapstructure:"-"`                                                       // Directory of the config file that defined this file (for relative path resolution)
 }
 
 // Binary represents a binary to be downloaded and installed from a remote source
@@ -70,6 +71,7 @@ type Binary struct {
 	Interactive      bool   `yaml:"interactive,omitempty" mapstructure:"interactive,omitempty"`           // Prompt for conflicts
 	PromptPermissions bool  `yaml:"prompt_permissions,omitempty" mapstructure:"prompt_permissions,omitempty"` // Prompt for permissions
 	PromptOwnership  bool   `yaml:"prompt_ownership,omitempty" mapstructure:"prompt_ownership,omitempty"`     // Prompt for ownership
+	ConfigDir        string `yaml:"-" mapstructure:"-"`                                                       // Directory of the config file that defined this binary (for relative path resolution)
 }
 
 // BackupPolicy defines automatic backup management policies

@@ -45,6 +45,17 @@ func loadConfigRecursive(configPath string, visited map[string]bool) (*Config, e
 		return nil, fmt.Errorf("failed to unmarshal config file %s: %w", configPath, err)
 	}
 
+	// Set ConfigDir for all file and binary entries in this config
+	configDir := filepath.Dir(configPath)
+	for name, file := range config.Files {
+		file.ConfigDir = configDir
+		config.Files[name] = file
+	}
+	for name, binary := range config.Binaries {
+		binary.ConfigDir = configDir
+		config.Binaries[name] = binary
+	}
+
 	// Process includes
 	if len(config.Includes) > 0 {
 		baseDir := filepath.Dir(configPath)
@@ -138,6 +149,18 @@ func mergeConfigs(dst, src *Config) error {
 		dst.Files[key] = file
 	}
 
+	// Merge repositories (append without duplicates by name)
+	dst.Repositories.Apt = removeDuplicateRepositories(append(dst.Repositories.Apt, src.Repositories.Apt...))
+	dst.Repositories.Flatpak = removeDuplicateFlatpakRepositories(append(dst.Repositories.Flatpak, src.Repositories.Flatpak...))
+
+	// Merge binaries (src overwrites dst if same key)
+	if dst.Binaries == nil {
+		dst.Binaries = make(map[string]Binary)
+	}
+	for key, binary := range src.Binaries {
+		dst.Binaries[key] = binary
+	}
+
 	// Merge dconf settings (src overwrites dst if same key)
 	if dst.DConf.Settings == nil {
 		dst.DConf.Settings = make(map[string]string)
@@ -169,6 +192,38 @@ func removeDuplicates(slice []string) []string {
 func removeDuplicatePackages(slice []PackageEntry) []PackageEntry {
 	seen := make(map[string]bool)
 	result := make([]PackageEntry, 0, len(slice))
+	
+	for _, item := range slice {
+		if !seen[item.Name] {
+			seen[item.Name] = true
+			result = append(result, item)
+		}
+	}
+	
+	return result
+}
+
+// removeDuplicateRepositories removes duplicate APT repositories by name while preserving order
+// Duplicates are determined by repository name only
+func removeDuplicateRepositories(slice []AptRepository) []AptRepository {
+	seen := make(map[string]bool)
+	result := make([]AptRepository, 0, len(slice))
+	
+	for _, item := range slice {
+		if !seen[item.Name] {
+			seen[item.Name] = true
+			result = append(result, item)
+		}
+	}
+	
+	return result
+}
+
+// removeDuplicateFlatpakRepositories removes duplicate Flatpak repositories by name while preserving order
+// Duplicates are determined by repository name only
+func removeDuplicateFlatpakRepositories(slice []FlatpakRepository) []FlatpakRepository {
+	seen := make(map[string]bool)
+	result := make([]FlatpakRepository, 0, len(slice))
 	
 	for _, item := range slice {
 		if !seen[item.Name] {

@@ -1,7 +1,9 @@
 package pkg
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -68,7 +70,7 @@ func (fm *FileManager) deployFile(name string, file config.File) (ManagedFile, e
 	fm.logger.Debug("Deploying file", "name", name, "source", file.Source, "destination", file.Destination)
 
 	// Resolve source path
-	sourcePath, err := fm.resolveSourcePath(file.Source)
+	sourcePath, err := fm.resolveSourcePath(file.Source, file)
 	if err != nil {
 		return ManagedFile{}, fmt.Errorf("failed to resolve source path: %w", err)
 	}
@@ -125,13 +127,19 @@ func (fm *FileManager) deployFile(name string, file config.File) (ManagedFile, e
 }
 
 // resolveSourcePath resolves the source file path, handling relative paths
-func (fm *FileManager) resolveSourcePath(source string) (string, error) {
+func (fm *FileManager) resolveSourcePath(source string, file config.File) (string, error) {
 	if filepath.IsAbs(source) {
 		return source, nil
 	}
 
-	// Relative to config directory
-	return filepath.Join(fm.configDir, source), nil
+	// Use the config directory from the file's config file, falling back to main config dir
+	configDir := file.ConfigDir
+	if configDir == "" {
+		configDir = fm.configDir
+	}
+
+	// Relative to the config directory that defined this file
+	return filepath.Join(configDir, source), nil
 }
 
 // resolveDestinationPath resolves the destination path, handling ~ expansion
@@ -175,8 +183,15 @@ func (fm *FileManager) ensureDirectory(dir string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		fm.logger.Debug("Creating directory", "path", dir)
 		if err := os.MkdirAll(dir, 0755); err != nil {
+			// Provide more context for permission errors
+			if strings.Contains(err.Error(), "permission denied") {
+				return fmt.Errorf("failed to create directory %s: %w. This may require elevated privileges (sudo)", dir, err)
+			}
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
+		fm.logger.Info("✓ Created directory", "path", dir)
+	} else if err != nil {
+		return fmt.Errorf("failed to check directory %s: %w", dir, err)
 	}
 
 	return nil
@@ -216,6 +231,14 @@ func (fm *FileManager) handleExistingFile(name, destPath, sourcePath string, fil
 				fm.logger.Debug("File already correctly symlinked", "path", destPath)
 				return "", nil
 			}
+		}
+	}
+
+	// Check if this is a regular file in copy mode and it's already identical
+	if !isSymlink && file.Copy {
+		if fm.areFilesIdentical(sourcePath, destPath) {
+			fm.logger.Debug("File already correctly copied", "path", destPath)
+			return "", nil
 		}
 	}
 
@@ -271,7 +294,8 @@ func (fm *FileManager) handleExistingFile(name, destPath, sourcePath string, fil
 	} else {
 		fm.logger.Info("⚠ Removing existing file", "path", destPath)
 		if err := os.Remove(destPath); err != nil {
-			return "", fmt.Errorf("failed to remove existing file: %w", err)
+			// If removal failed, provide more context
+			return "", fmt.Errorf("failed to remove existing file at %s: %w. Consider setting 'backup: true' for this file or running with --interactive flag", destPath, err)
 		}
 		return "", nil
 	}
@@ -287,7 +311,11 @@ func (fm *FileManager) createSymlink(sourcePath, destPath string) error {
 	fm.logger.Debug("Creating symlink", "from", sourcePath, "to", destPath)
 	
 	if err := os.Symlink(sourcePath, destPath); err != nil {
-		return fmt.Errorf("failed to create symlink: %w", err)
+		// Check if file still exists (race condition or handleExistingFile failed)
+		if _, statErr := os.Lstat(destPath); statErr == nil {
+			return fmt.Errorf("symlink creation failed because destination still exists: %s. This suggests the existing file could not be removed or backed up", destPath)
+		}
+		return fmt.Errorf("failed to create symlink from %s to %s: %w", sourcePath, destPath, err)
 	}
 
 	return nil
@@ -481,6 +509,14 @@ func (fm *FileManager) ValidateFilePermissions(files map[string]config.File) err
 		}
 
 		destDir := filepath.Dir(destPath)
+		
+		// Check if destination is in a system directory that requires elevated privileges
+		if fm.requiresElevatedPrivileges(destPath) && os.Geteuid() != 0 {
+			fm.logger.Warn("File deployment to system directory requires elevated privileges", 
+				"file", name, 
+				"destination", destPath, 
+				"suggestion", "run with sudo or use a different destination path")
+		}
 		
 		// Check if we can write to the destination directory
 		if err := fm.checkWritePermission(destDir); err != nil {
@@ -1215,4 +1251,62 @@ func (fm *FileManager) parseBackupAge(ageStr string) (time.Duration, error) {
 		// Standard Go duration parsing
 		return time.ParseDuration(ageStr)
 	}
+}
+
+// areFilesIdentical checks if two files have identical content using SHA256
+func (fm *FileManager) areFilesIdentical(sourcePath, destPath string) bool {
+	sourceHash, err := fm.calculateFileHash(sourcePath)
+	if err != nil {
+		fm.logger.Debug("Failed to calculate source file hash", "path", sourcePath, "error", err)
+		return false
+	}
+
+	destHash, err := fm.calculateFileHash(destPath)
+	if err != nil {
+		fm.logger.Debug("Failed to calculate destination file hash", "path", destPath, "error", err)
+		return false
+	}
+
+	return sourceHash == destHash
+}
+
+// calculateFileHash calculates SHA256 hash of a file
+func (fm *FileManager) calculateFileHash(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
+// requiresElevatedPrivileges checks if a path requires root privileges
+func (fm *FileManager) requiresElevatedPrivileges(path string) bool {
+	systemPaths := []string{
+		"/etc/",
+		"/usr/",
+		"/opt/",
+		"/var/",
+		"/bin/",
+		"/sbin/",
+		"/lib/",
+		"/lib64/",
+		"/boot/",
+		"/sys/",
+		"/proc/",
+	}
+	
+	for _, sysPath := range systemPaths {
+		if strings.HasPrefix(path, sysPath) {
+			return true
+		}
+	}
+	
+	return false
 }

@@ -15,28 +15,42 @@ func TestFileManager_resolveSourcePath(t *testing.T) {
 	tests := []struct {
 		name     string
 		source   string
+		configDir string
 		expected string
 	}{
 		{
 			name:     "absolute path",
 			source:   "/absolute/path/file.txt",
+			configDir: "",
 			expected: "/absolute/path/file.txt",
 		},
 		{
 			name:     "relative path",
 			source:   "dotfiles/vimrc",
+			configDir: "",
 			expected: "/home/user/config/dotfiles/vimrc",
 		},
 		{
 			name:     "current directory file",
 			source:   "config.yaml",
+			configDir: "",
 			expected: "/home/user/config/config.yaml",
+		},
+		{
+			name:     "relative path with config dir",
+			source:   "dotfiles/vimrc",
+			configDir: "/home/user/included",
+			expected: "/home/user/included/dotfiles/vimrc",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := fm.resolveSourcePath(tt.source)
+			file := config.File{
+				Source: tt.source,
+				ConfigDir: tt.configDir,
+			}
+			result, err := fm.resolveSourcePath(tt.source, file)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
