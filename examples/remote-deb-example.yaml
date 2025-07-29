@@ -1,0 +1,53 @@
+version: "1.0"
+
+# Remote .deb Package Example Configuration
+# This example demonstrates how to install .deb packages from remote URLs
+# with configr's intelligent caching system
+
+packages:
+  apt:
+    # Latest VS Code from Microsoft (always_check strategy - 1h TTL)
+    # URL contains "latest" so configr will check frequently for updates
+    - "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64":
+        flags: ["-y"]
+
+    # Specific Discord version (time_based strategy - 24h TTL)  
+    # Versioned URL gets moderate caching
+    - "https://dl.discordapp.net/apps/linux/0.0.29/discord-0.0.29.deb":
+        flags: ["-y"]
+
+    # GitHub CLI latest release (always_check strategy - 1h TTL)
+    # Latest pattern detected, will check for updates frequently
+    - "https://github.com/cli/cli/releases/latest/download/gh_2.40.1_linux_amd64.deb":
+        flags: ["-y"]
+
+    # Docker Desktop stable release (version_based strategy - 7d TTL)
+    # Stable version will be cached longer with version comparison
+    - "https://desktop.docker.com/linux/main/amd64/docker-desktop-4.25.2-amd64.deb":
+        flags: ["-y"]
+
+    # Mix with repository packages - configr handles all seamlessly
+    - curl
+    - git
+
+    # Mix with local .deb files
+    - "./custom-packages/my-app.deb":
+        flags: ["-y"]
+
+# Repository packages work normally alongside remote .deb files
+repositories:
+  apt:
+    vscode_repo:
+      uri: "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main"
+      key: "https://packages.microsoft.com/keys/microsoft.asc"
+
+# Configuration with package defaults
+package_defaults:
+  apt: ["-y", "--no-install-recommends"]
+
+# Notes:
+# - Remote .deb files are cached in ~/.cache/configr/debs/
+# - Cache strategy is automatically detected based on URL patterns
+# - Use 'configr cache stats' to see cache performance
+# - Use 'configr cache clear' to remove cached files
+# - Requires 'dpkg-deb' tool (install with: sudo apt install dpkg-dev)
