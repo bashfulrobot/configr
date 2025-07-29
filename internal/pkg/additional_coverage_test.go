@@ -60,7 +60,8 @@ func TestOptimizedLoader_NewOptimizedLoader(t *testing.T) {
 func TestOptimizedAptManager_NewOptimizedAptManager(t *testing.T) {
 	logger := log.New(os.Stderr)
 	cm := NewCacheManager(logger)
-	apt := NewOptimizedAptManager(logger, false, cm)
+	pm := NewPrivilegeManager(logger, false)
+	apt := NewOptimizedAptManager(logger, false, cm, pm)
 	
 	if apt == nil {
 		t.Fatal("Expected OptimizedAptManager, got nil")

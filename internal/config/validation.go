@@ -862,6 +862,10 @@ func sanitizePackageName(name string) string {
 func isValidPackageNameForManager(name, manager string) bool {
 	switch manager {
 	case "apt":
+		// Check if it's a remote .deb file (HTTPS URL)
+		if strings.HasPrefix(name, "https://") || strings.HasPrefix(name, "http://") {
+			return isValidRemoteDebURL(name)
+		}
 		// Check if it's a local .deb file
 		if strings.HasSuffix(name, ".deb") {
 			// If it ends with .deb, it must be a valid file path
@@ -1404,6 +1408,26 @@ func isValidSignedByPath(signedBy string) bool {
 	// Validate filename (no path traversal)
 	filename := strings.TrimPrefix(signedBy, "/usr/share/keyrings/")
 	if strings.Contains(filename, "/") || strings.Contains(filename, "..") {
+		return false
+	}
+	
+	return true
+}
+
+// isValidRemoteDebURL validates remote .deb URLs for security
+func isValidRemoteDebURL(url string) bool {
+	// Must be HTTPS for security
+	if !strings.HasPrefix(url, "https://") {
+		return false
+	}
+	
+	// Must end with .deb
+	if !strings.HasSuffix(url, ".deb") {
+		return false
+	}
+	
+	// Basic URL validation - check for suspicious patterns
+	if strings.Contains(url, "..") || strings.Contains(url, " ") {
 		return false
 	}
 	
