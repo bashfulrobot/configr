@@ -13,7 +13,7 @@ This command will:
 .PP
 - Add APT and Flatpak repositories
 .PP
-- Deploy and symlink files to their destinations
+- Deploy and symlink files to their destinations with intelligent conflict detection
 .PP
 - Install APT, Flatpak, and Snap packages
 .PP
@@ -23,7 +23,20 @@ This command will:
 .PP
 - Track package state for future removal operations
 .PP
+- Automatically create system directories with proper privilege handling
+.PP
 - Interactively resolve file conflicts when --interactive flag is used
+.PP
+.PP
+Enhanced file management features:
+.PP
+- Intelligent conflict detection: automatically skips files that are already correctly deployed
+.PP
+- Context-aware path resolution: relative paths in included configs resolve correctly
+.PP
+- System directory support: enhanced privilege detection and directory creation
+.PP
+- SHA256-based file comparison for copy mode verification
 .PP
 .PP
 Interactive features include:

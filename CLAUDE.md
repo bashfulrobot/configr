@@ -15,7 +15,7 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 
 **✅ Implemented (Production Ready):**
 
-- APT package management (repository + local .deb files)
+- APT package management (repository + local .deb files + remote .deb files with intelligent caching)
 - Flatpak package management (application installation with reverse domain validation)
 - Snap package management (package installation with naming convention validation)
 - Package removal system (removes packages when removed from configuration)
@@ -30,6 +30,7 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - Configuration and system state caching for performance optimization
 - Professional CLI with charmbracelet/fang integration
 - Comprehensive test coverage (170+ tests)
+- Remote .deb download system with smart caching, version detection, and bandwidth optimization
 
 **✅ Recently Implemented:**
 
@@ -39,6 +40,10 @@ Written by the staff member "Gopher", this application will be a scaled-down ver
 - Advanced permission handling with interactive prompts
 - Advanced include system with glob patterns and conditional includes
 - System detection for OS, hostname, and environment-based configuration
+- Enhanced file conflict detection with SHA256 comparison
+- Context-aware relative path resolution for included configurations
+- System directory privilege detection and enhanced error messages
+- Automatic directory creation with proper permission handling
 
 **📋 Planned Features:**
 
@@ -158,7 +163,7 @@ repositories:
 ```yaml
 files:
   filename:
-    source: "path/to/source"         # Required: source file path
+    source: "path/to/source"         # Required: source file path (relative to config file's directory)
     destination: "/target/path"      # Required: where to place the file
     owner: "user"                    # Optional: file owner (preserves if omitted)
     group: "group"                   # Optional: file group (preserves if omitted)
@@ -169,6 +174,14 @@ files:
     prompt_permissions: true         # Optional: prompt for permission changes
     prompt_ownership: true           # Optional: prompt for ownership changes
 ```
+
+**Enhanced File Management Features:**
+
+- **Intelligent Path Resolution**: Relative source paths are resolved relative to the config file that defines them, enabling proper include hierarchies
+- **Advanced Conflict Detection**: Automatically detects when files are already correctly deployed (symlinked to right source or identical copies)
+- **System Directory Support**: Enhanced privilege detection and directory creation for system paths like `/etc/`, `/usr/`, etc.
+- **Improved Error Messages**: Clear, actionable error messages with suggestions for backup options and privilege requirements
+- **Smart Directory Creation**: Automatically creates destination directories with proper permission handling
 
 **Binary Management Schema:**
 
@@ -235,6 +248,9 @@ configr [global-flags] <command> [command-flags] [arguments]
 - Path safety (prevents unsafe destinations like `../../../etc/passwd`)
 - Package name validation (manager-specific rules)
 - DConf path validation (dconf settings paths and value formats)
+- Remote .deb URL validation (HTTPS enforcement and security checks)
+- System directory privilege validation (warns when root access required)
+- Relative path resolution validation (context-aware path checking)
 
 **Error Reporting Style (Rust-inspired):**
 
@@ -257,6 +273,9 @@ error: source file not found
 - Position-aware error reporting with line/column numbers
 - Verbose mode for detailed operation insights
 - Quick fix suggestions with immediate actionable solutions
+- Enhanced directory creation feedback with privilege context
+- Intelligent file conflict resolution with backup suggestions
+- Context-aware error messages for include path resolution issues
 
 ### External Dependencies
 
@@ -287,15 +306,18 @@ error: source file not found
 - **Dual deployment modes**: Symlink (default) and copy modes
 - **Backup system**: Timestamped backups of existing files before replacement
 - **Permission management**: Sets owner, group, and mode when specified
-- **Path resolution**: Handles relative, absolute, and `~` user expansion
+- **Enhanced path resolution**: Context-aware relative path resolution for included configs
 - **Safety checks**: Permission validation and path safety verification
+- **System directory support**: Automatic privilege detection and directory creation
 
 **Key Implementation Details:**
 
 - **Symlink Mode (default)**: Live updates, clear ownership, safe removal, backup restoration
 - **Copy Mode**: Static snapshots, independence, standard files, no symlink overhead
-- **Path Resolution Hierarchy**: Absolute paths → Relative to config dir → User home expansion
-- **Comprehensive validation**: Source file existence, destination safety, permission checks
+- **Intelligent Path Resolution**: Relative paths resolved relative to the config file that defines them
+- **Advanced Conflict Detection**: SHA256-based file comparison and symlink target verification
+- **System Directory Handling**: Enhanced directory creation with privilege context and error messages
+- **Comprehensive validation**: Source file existence, destination safety, permission checks, system path detection
 
 #### APT Package Management
 
@@ -329,14 +351,35 @@ return config.GetDefaultFlags("apt")
 - Mixed installations (repository + local packages seamlessly)
 - File existence verification before installation
 
+**Remote .deb File Support:**
+
+- **Intelligent Caching**: Downloads remote .deb files with smart caching strategies
+- **Bandwidth Optimization**: HTTP conditional requests using ETag and Last-Modified headers
+- **Version Detection**: Automatic version extraction using `dpkg-deb` for update comparison
+- **Cache Strategies**: 
+  - `always_check`: 1-hour TTL for latest builds (URLs containing "latest", "master", "main")
+  - `time_based`: 24-hour TTL for versioned releases (default)
+  - `version_based`: 7-day TTL with version comparison for stable releases
+- **URL Pattern Detection**: Automatically determines appropriate caching strategy based on URL patterns
+- **Checksum Validation**: SHA256 checksums ensure file integrity
+- **Cache Location**: `~/.cache/configr/debs/` with metadata files for tracking
+
+**Cache Management:**
+
+- **Conditional Downloads**: Only re-download when remote file has changed
+- **Metadata Tracking**: JSON cache entries with timestamps, versions, checksums
+- **Automatic Cleanup**: TTL-based expiration with configurable policies
+- **Update Detection**: Version comparison for determining when updates are available
+
 **Installation Logic:**
 
-1. Check apt command availability
+1. Check apt command availability and dpkg-deb tool
 2. Group packages by resolved flags
-3. Separate local .deb files from repository packages
-4. Check installation status to avoid duplicates
-5. Install in optimized batches
-6. Provide clear success/failure feedback
+3. Separate local .deb files, remote .deb files, and repository packages
+4. Handle remote .deb files with intelligent caching
+5. Check installation status to avoid duplicates
+6. Install in optimized batches
+7. Provide clear success/failure feedback with caching statistics
 
 #### Configuration Validation System
 
